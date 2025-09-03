@@ -1,0 +1,267 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Storage stack with EFS for Milvus persistent storage'
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Environment name
+  
+  VpcId:
+    Type: String
+    Description: VPC ID
+  
+  PrivateSubnet1Id:
+    Type: String
+    Description: Private Subnet 1 ID
+  
+  PrivateSubnet2Id:
+    Type: String
+    Description: Private Subnet 2 ID
+  
+  EFSSecurityGroupId:
+    Type: String
+    Description: EFS Security Group ID
+
+Resources:
+  # EFS File System
+  EFSFileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      CreationToken: !Sub '${AWS::StackName}-milvus-data'
+      PerformanceMode: generalPurpose
+      ThroughputMode: provisioned
+      ProvisionedThroughputInMibps: 100
+      Encrypted: true
+      KmsKeyId: alias/aws/elasticfilesystem
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-milvus-storage'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Service
+          Value: milvus
+        - Key: Platform
+          Value: ARM64
+
+  # EFS Mount Targets
+  EFSMountTarget1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      SubnetId: !Ref PrivateSubnet1Id
+      SecurityGroups:
+        - !Ref EFSSecurityGroupId
+
+  EFSMountTarget2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      SubnetId: !Ref PrivateSubnet2Id
+      SecurityGroups:
+        - !Ref EFSSecurityGroupId
+
+  # EFS Access Points
+  MilvusDataAccessPoint:
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      PosixUser:
+        Uid: 1000
+        Gid: 1000
+      RootDirectory:
+        Path: /milvus-data
+        CreationInfo:
+          OwnerUid: 1000
+          OwnerGid: 1000
+          Permissions: '755'
+      AccessPointTags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-milvus-data-access-point'
+        - Key: Purpose
+          Value: milvus-data-storage
+        - Key: Environment
+          Value: !Ref Environment
+
+  MilvusLogsAccessPoint:
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      PosixUser:
+        Uid: 1000
+        Gid: 1000
+      RootDirectory:
+        Path: /milvus-logs
+        CreationInfo:
+          OwnerUid: 1000
+          OwnerGid: 1000
+          Permissions: '755'
+      AccessPointTags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-milvus-logs-access-point'
+        - Key: Purpose
+          Value: milvus-logs-storage
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Note: EFS Backup Policy can be configured manually via AWS Console or CLI
+  # aws efs put-backup-policy --file-system-id <file-system-id> --backup-policy Status=ENABLED
+
+  # S3 Bucket for model artifacts and training data
+  ModelArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-model-artifacts-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+          - Id: TransitionToIA
+            Status: Enabled
+            Transition:
+              StorageClass: STANDARD_IA
+              TransitionInDays: 30
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Transition:
+              StorageClass: GLACIER
+              TransitionInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-model-artifacts'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: model-storage
+
+  # S3 Bucket for training datasets
+  TrainingDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-training-data-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+          - Id: TransitionToIA
+            Status: Enabled
+            Transition:
+              StorageClass: STANDARD_IA
+              TransitionInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-training-data'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: training-data-storage
+
+  # S3 Bucket Policy for ECS tasks
+  ModelArtifactsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ModelArtifactsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowECSTaskAccess
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AWS::StackName}-ecs-task-role'
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:ListBucket
+            Resource:
+              - !Sub '${ModelArtifactsBucket}/*'
+              - !Ref ModelArtifactsBucket
+
+  TrainingDataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref TrainingDataBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowECSTaskAccess
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AWS::StackName}-ecs-task-role'
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:ListBucket
+            Resource:
+              - !Sub '${TrainingDataBucket}/*'
+              - !Ref TrainingDataBucket
+          - Sid: AllowBedrockAccess
+            Effect: Allow
+            Principal:
+              Service: bedrock.amazonaws.com
+            Action:
+              - s3:GetObject
+              - s3:ListBucket
+            Resource:
+              - !Sub '${TrainingDataBucket}/*'
+              - !Ref TrainingDataBucket
+            Condition:
+              StringEquals:
+                'aws:SourceAccount': !Ref AWS::AccountId
+
+Outputs:
+  EFSFileSystemId:
+    Description: EFS File System ID
+    Value: !Ref EFSFileSystem
+    Export:
+      Name: !Sub '${AWS::StackName}-EFSFileSystemId'
+
+  MilvusDataAccessPointId:
+    Description: Milvus Data Access Point ID
+    Value: !Ref MilvusDataAccessPoint
+    Export:
+      Name: !Sub '${AWS::StackName}-MilvusDataAccessPointId'
+
+  MilvusLogsAccessPointId:
+    Description: Milvus Logs Access Point ID
+    Value: !Ref MilvusLogsAccessPoint
+    Export:
+      Name: !Sub '${AWS::StackName}-MilvusLogsAccessPointId'
+
+  ModelArtifactsBucketName:
+    Description: Model Artifacts S3 Bucket Name
+    Value: !Ref ModelArtifactsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ModelArtifactsBucketName'
+
+  TrainingDataBucketName:
+    Description: Training Data S3 Bucket Name
+    Value: !Ref TrainingDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-TrainingDataBucketName'

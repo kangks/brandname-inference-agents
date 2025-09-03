@@ -1,0 +1,74 @@
+{
+  "serviceName": "orchestrator-with-agents",
+  "cluster": "${ECS_CLUSTER_NAME}",
+  "taskDefinition": "multilingual-inference-orchestrator-with-agents",
+  "desiredCount": 2,
+  "launchType": "FARGATE",
+  "platformVersion": "1.4.0",
+  "networkConfiguration": {
+    "awsvpcConfiguration": {
+      "subnets": [
+        "${PRIVATE_SUBNET_1_ID}",
+        "${PRIVATE_SUBNET_2_ID}"
+      ],
+      "securityGroups": [
+        "${ECS_SECURITY_GROUP_ID}"
+      ],
+      "assignPublicIp": "DISABLED"
+    }
+  },
+  "loadBalancers": [
+    {
+      "targetGroupArn": "${TARGET_GROUP_ARN}",
+      "containerName": "orchestrator-with-agents",
+      "containerPort": 8080
+    }
+  ],
+  "serviceRegistries": [
+    {
+      "registryArn": "${SERVICE_DISCOVERY_ARN}",
+      "containerName": "orchestrator-with-agents",
+      "containerPort": 8080
+    }
+  ],
+  "deploymentConfiguration": {
+    "maximumPercent": 200,
+    "minimumHealthyPercent": 50,
+    "deploymentCircuitBreaker": {
+      "enable": true,
+      "rollback": true
+    }
+  },
+  "capacityProviderStrategy": [
+    {
+      "capacityProvider": "FARGATE",
+      "weight": 1,
+      "base": 1
+    },
+    {
+      "capacityProvider": "FARGATE_SPOT",
+      "weight": 4
+    }
+  ],
+  "enableExecuteCommand": true,
+  "enableLogging": true,
+  "propagateTags": "SERVICE",
+  "tags": [
+    {
+      "key": "Environment",
+      "value": "production"
+    },
+    {
+      "key": "Service",
+      "value": "orchestrator-with-agents"
+    },
+    {
+      "key": "Platform",
+      "value": "ARM64"
+    },
+    {
+      "key": "Version",
+      "value": "2.0"
+    }
+  ]
+}

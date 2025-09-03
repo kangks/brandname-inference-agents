@@ -1,0 +1,407 @@
+"""
+Agent Registry for managing default agent instances.
+
+This module provides centralized registration and management of default agents
+for the multilingual product inference system, following PEP 8 standards.
+"""
+
+import logging
+from typing import Dict, Any, Optional, Type, List
+import asyncio
+
+from ..config.settings import get_config
+from .base_agent import BaseAgent, NERAgent, RAGAgent, LLMAgent, HybridAgent
+from .ner_agent import SpacyNERAgent, MultilingualNERAgent
+from .rag_agent import SentenceTransformerRAGAgent, EnhancedRAGAgent
+from .llm_agent import BedrockLLMAgent, EnhancedBedrockLLMAgent
+from .hybrid_agent import SequentialHybridAgent, OptimizedHybridAgent
+from .simple_agent import SimpleInferenceAgent
+# Note: StrandsOrchestratorAgent import removed to avoid circular dependency
+
+
+logger = logging.getLogger(__name__)
+
+
+class AgentRegistry:
+    """
+    Registry for managing agent instances and configurations.
+    
+    Provides centralized registration, initialization, and management
+    of default agents for the inference system.
+    """
+    
+    def __init__(self) -> None:
+        """Initialize agent registry."""
+        self.registered_agents: Dict[str, BaseAgent] = {}
+        self.agent_configs: Dict[str, Dict[str, Any]] = {}
+        self.system_config = get_config()
+        
+        # Default agent configurations
+        self._setup_default_configurations()
+    
+    def _setup_default_configurations(self) -> None:
+        """Setup default configurations for all agent types."""
+        
+        # NER Agent Configuration
+        self.agent_configs["ner"] = {
+            "model_name": "xx_ent_wiki_sm",
+            "confidence_threshold": 0.5,
+            "max_text_length": 1000,
+            "use_transformer_fallback": False,
+            "thai_text_threshold": 0.3,
+            "mixed_language_boost": 0.15
+        }
+        
+        # RAG Agent Configuration
+        self.agent_configs["rag"] = {
+            "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+            "embedding_dimension": 384,
+            "milvus_uri": "./milvus_rag.db",
+            "collection_name": "product_brand",
+            "top_k": 5,
+            "similarity_threshold": 0.7,
+            "confidence_threshold": 0.5,
+            "max_text_length": 512,
+            "similarity_weight": 0.6,
+            "frequency_weight": 0.3,
+            "diversity_weight": 0.1,
+            "use_fuzzy_matching": True,
+            "fuzzy_threshold": 0.8,
+            "multilingual_boost": 0.1
+        }
+        
+        # LLM Agent Configuration
+        self.agent_configs["llm"] = {
+            "aws_profile": self.system_config.aws.profile_name,
+            "aws_region": self.system_config.aws.region,
+            "model_id": "amazon.nova-pro-v1:0",
+            "max_tokens": 1000,
+            "temperature": 0.1,
+            "top_p": 0.9,
+            "confidence_threshold": 0.5,
+            "max_text_length": 1000,
+            "timeout_seconds": 30,
+            "use_context_enhancement": True,
+            "context_weight": 0.3,
+            "enable_reasoning_analysis": True
+        }
+        
+        # Hybrid Agent Configuration
+        self.agent_configs["hybrid"] = {
+            "enable_ner_stage": True,
+            "enable_rag_stage": True,
+            "enable_llm_stage": True,
+            "ner_confidence_threshold": 0.8,
+            "rag_confidence_threshold": 0.8,
+            "ner_weight": 0.3,
+            "rag_weight": 0.4,
+            "llm_weight": 0.3,
+            "use_early_termination": False,
+            "use_context_enhancement": True,
+            "max_pipeline_time": 60.0,
+            "use_dynamic_thresholds": True,
+            "use_stage_selection": True,
+            "performance_mode": "balanced",  # fast, balanced, accurate
+            "min_confidence_threshold": 0.6,
+            "max_confidence_threshold": 0.9
+        }
+        
+        # Simple Agent Configuration (fallback)
+        self.agent_configs["simple"] = {
+            "confidence_threshold": 0.6
+        }
+    
+    async def register_default_agents(self) -> Dict[str, BaseAgent]:
+        """
+        Register and initialize all default agents.
+        
+        Returns:
+            Dictionary of registered and initialized agents
+        """
+        logger.info("Registering default agents...")
+        
+        try:
+            # Register NER agent
+            await self._register_ner_agent()
+            
+            # Register RAG agent
+            await self._register_rag_agent()
+            
+            # Register LLM agent
+            await self._register_llm_agent()
+            
+            # Register Hybrid agent
+            await self._register_hybrid_agent()
+            
+            # Register Simple agent as fallback
+            await self._register_simple_agent()
+            
+            logger.info(f"Successfully registered {len(self.registered_agents)} default agents")
+            return self.registered_agents.copy()
+            
+        except Exception as e:
+            logger.error(f"Failed to register default agents: {str(e)}")
+            raise
+    
+    async def _register_ner_agent(self) -> None:
+        """Register and initialize NER agent."""
+        try:
+            logger.info("Registering NER agent...")
+            
+            # Create multilingual NER agent (enhanced version)
+            ner_agent = MultilingualNERAgent(self.agent_configs["ner"])
+            
+            # Initialize the agent
+            await ner_agent.initialize()
+            
+            # Register the agent
+            self.registered_agents["ner"] = ner_agent
+            
+            logger.info("NER agent registered successfully")
+            
+        except Exception as e:
+            logger.warning(f"Failed to register NER agent: {str(e)}")
+            # Don't raise exception - system can work without NER
+    
+    async def _register_rag_agent(self) -> None:
+        """Register and initialize RAG agent."""
+        try:
+            logger.info("Registering RAG agent...")
+            
+            # Create enhanced RAG agent
+            rag_agent = EnhancedRAGAgent(self.agent_configs["rag"])
+            
+            # Initialize the agent
+            await rag_agent.initialize()
+            
+            # Register the agent
+            self.registered_agents["rag"] = rag_agent
+            
+            logger.info("RAG agent registered successfully")
+            
+        except Exception as e:
+            logger.warning(f"Failed to register RAG agent: {str(e)}")
+            # Don't raise exception - system can work without RAG
+    
+    async def _register_llm_agent(self) -> None:
+        """Register and initialize LLM agent."""
+        try:
+            logger.info("Registering LLM agent...")
+            
+            # Create enhanced Bedrock LLM agent
+            llm_agent = EnhancedBedrockLLMAgent(self.agent_configs["llm"])
+            
+            # Initialize the agent
+            await llm_agent.initialize()
+            
+            # Register the agent
+            self.registered_agents["llm"] = llm_agent
+            
+            logger.info("LLM agent registered successfully")
+            
+        except Exception as e:
+            logger.warning(f"Failed to register LLM agent: {str(e)}")
+            # Don't raise exception - system can work without LLM
+    
+    async def _register_hybrid_agent(self) -> None:
+        """Register and initialize Hybrid agent."""
+        try:
+            logger.info("Registering Hybrid agent...")
+            
+            # Create optimized hybrid agent
+            hybrid_agent = OptimizedHybridAgent(self.agent_configs["hybrid"])
+            
+            # Initialize the agent
+            await hybrid_agent.initialize()
+            
+            # Register the agent
+            self.registered_agents["hybrid"] = hybrid_agent
+            
+            logger.info("Hybrid agent registered successfully")
+            
+        except Exception as e:
+            logger.warning(f"Failed to register Hybrid agent: {str(e)}")
+            # Don't raise exception - system can work without Hybrid
+    
+    async def _register_simple_agent(self) -> None:
+        """Register and initialize Simple agent as fallback."""
+        try:
+            logger.info("Registering Simple agent...")
+            
+            # Create simple inference agent
+            simple_agent = SimpleInferenceAgent(self.agent_configs["simple"])
+            
+            # Initialize the agent
+            await simple_agent.initialize()
+            
+            # Register the agent
+            self.registered_agents["simple"] = simple_agent
+            
+            logger.info("Simple agent registered successfully")
+            
+        except Exception as e:
+            logger.warning(f"Failed to register Simple agent: {str(e)}")
+            # Don't raise exception - this is just a fallback
+    
+    def get_agent(self, agent_name: str) -> Optional[BaseAgent]:
+        """
+        Get a registered agent by name.
+        
+        Args:
+            agent_name: Name of the agent to retrieve
+            
+        Returns:
+            Agent instance or None if not found
+        """
+        return self.registered_agents.get(agent_name)
+    
+    def get_all_agents(self) -> Dict[str, BaseAgent]:
+        """
+        Get all registered agents.
+        
+        Returns:
+            Dictionary of all registered agents
+        """
+        return self.registered_agents.copy()
+    
+    def list_agent_names(self) -> List[str]:
+        """
+        List names of all registered agents.
+        
+        Returns:
+            List of agent names
+        """
+        return list(self.registered_agents.keys())
+    
+    async def cleanup_agents(self) -> None:
+        """Clean up all registered agents."""
+        logger.info("Cleaning up registered agents...")
+        
+        cleanup_tasks = []
+        for agent_name, agent in self.registered_agents.items():
+            try:
+                cleanup_tasks.append(agent.cleanup())
+            except Exception as e:
+                logger.warning(f"Error scheduling cleanup for {agent_name}: {str(e)}")
+        
+        if cleanup_tasks:
+            await asyncio.gather(*cleanup_tasks, return_exceptions=True)
+        
+        self.registered_agents.clear()
+        logger.info("Agent cleanup completed")
+    
+    def update_agent_config(self, agent_name: str, config_updates: Dict[str, Any]) -> None:
+        """
+        Update configuration for a specific agent type.
+        
+        Args:
+            agent_name: Name of the agent type
+            config_updates: Configuration updates to apply
+        """
+        if agent_name in self.agent_configs:
+            self.agent_configs[agent_name].update(config_updates)
+            logger.info(f"Updated configuration for {agent_name} agent")
+        else:
+            logger.warning(f"Unknown agent type: {agent_name}")
+    
+    async def reinitialize_agent(self, agent_name: str) -> bool:
+        """
+        Reinitialize a specific agent with updated configuration.
+        
+        Args:
+            agent_name: Name of the agent to reinitialize
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Clean up existing agent if present
+            if agent_name in self.registered_agents:
+                await self.registered_agents[agent_name].cleanup()
+                del self.registered_agents[agent_name]
+            
+            # Reinitialize based on agent type
+            if agent_name == "ner":
+                await self._register_ner_agent()
+            elif agent_name == "rag":
+                await self._register_rag_agent()
+            elif agent_name == "llm":
+                await self._register_llm_agent()
+            elif agent_name == "hybrid":
+                await self._register_hybrid_agent()
+            elif agent_name == "simple":
+                await self._register_simple_agent()
+            else:
+                logger.error(f"Unknown agent type for reinitialization: {agent_name}")
+                return False
+            
+            logger.info(f"Successfully reinitialized {agent_name} agent")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to reinitialize {agent_name} agent: {str(e)}")
+            return False
+
+
+# Global registry instance
+_global_registry: Optional[AgentRegistry] = None
+
+
+def get_agent_registry() -> AgentRegistry:
+    """
+    Get the global agent registry instance.
+    
+    Returns:
+        Global AgentRegistry instance
+    """
+    global _global_registry
+    
+    if _global_registry is None:
+        _global_registry = AgentRegistry()
+    
+    return _global_registry
+
+
+async def initialize_default_agents() -> Dict[str, BaseAgent]:
+    """
+    Initialize all default agents using the global registry.
+    
+    Returns:
+        Dictionary of initialized agents
+    """
+    registry = get_agent_registry()
+    return await registry.register_default_agents()
+
+
+async def cleanup_default_agents() -> None:
+    """Clean up all default agents using the global registry."""
+    global _global_registry
+    
+    if _global_registry:
+        await _global_registry.cleanup_agents()
+        _global_registry = None
+
+
+def get_default_agent(agent_name: str) -> Optional[BaseAgent]:
+    """
+    Get a default agent by name.
+    
+    Args:
+        agent_name: Name of the agent to retrieve
+        
+    Returns:
+        Agent instance or None if not found
+    """
+    registry = get_agent_registry()
+    return registry.get_agent(agent_name)
+
+
+def list_default_agents() -> List[str]:
+    """
+    List names of all registered default agents.
+    
+    Returns:
+        List of agent names
+    """
+    registry = get_agent_registry()
+    return registry.list_agent_names()

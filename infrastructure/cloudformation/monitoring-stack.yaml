@@ -1,0 +1,405 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudWatch monitoring and alerting infrastructure for multilingual product inference system'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: 'dev'
+    AllowedValues: ['dev', 'staging', 'prod', 'production']
+    Description: 'Environment name'
+  
+  NotificationEmail:
+    Type: String
+    Description: 'Email address for alarm notifications'
+    Default: 'admin@example.com'
+  
+  LogRetentionDays:
+    Type: Number
+    Default: 30
+    Description: 'CloudWatch logs retention period in days'
+  
+  DashboardName:
+    Type: String
+    Default: 'multilingual-inference'
+    Description: 'Name for the CloudWatch dashboard'
+
+Resources:
+  # SNS Topic for Alarm Notifications
+  AlarmNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${Environment}-multilingual-inference-alarms'
+      DisplayName: 'Multilingual Inference System Alarms'
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref NotificationEmail
+
+  # CloudWatch Log Groups
+  InferenceLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/multilingual-inference/${Environment}/inference'
+      RetentionInDays: !Ref LogRetentionDays
+
+  AgentLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/multilingual-inference/${Environment}/agents'
+      RetentionInDays: !Ref LogRetentionDays
+
+  OrchestratorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/multilingual-inference/${Environment}/orchestrator'
+      RetentionInDays: !Ref LogRetentionDays
+
+  HealthCheckLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/multilingual-inference/${Environment}/health'
+      RetentionInDays: !Ref LogRetentionDays
+
+  DiagnosticsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/multilingual-inference/${Environment}/diagnostics'
+      RetentionInDays: !Ref LogRetentionDays
+
+  # CloudWatch Dashboard
+  InferenceDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub '${Environment}-${DashboardName}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["MultilingualInference", "InferenceLatency", "BestMethod", "ner"],
+                  [".", ".", ".", "rag"],
+                  [".", ".", ".", "llm"],
+                  [".", ".", ".", "hybrid"]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Inference Latency by Method (ms)",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["MultilingualInference", "InferenceConfidence", "BestMethod", "ner"],
+                  [".", ".", ".", "rag"],
+                  [".", ".", ".", "llm"],
+                  [".", ".", ".", "hybrid"]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Inference Confidence by Method",
+                "yAxis": {
+                  "left": {
+                    "min": 0,
+                    "max": 1
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["MultilingualInference", "AgentHealth", "AgentName", "ner"],
+                  [".", ".", ".", "rag"],
+                  [".", ".", ".", "llm"],
+                  [".", ".", ".", "hybrid"],
+                  [".", ".", ".", "orchestrator"]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Agent Health Status",
+                "yAxis": {
+                  "left": {
+                    "min": 0,
+                    "max": 1
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "x": 8,
+              "y": 6,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["MultilingualInference", "ErrorCount", "ErrorType", "timeout"],
+                  [".", ".", ".", "initialization"],
+                  [".", ".", ".", "processing"],
+                  [".", ".", ".", "circuit_breaker"]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Error Count by Type"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 16,
+              "y": 6,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["MultilingualInference", "CPUUtilization", "Component", "System"],
+                  [".", "MemoryUtilization", ".", "."],
+                  [".", "DiskUtilization", ".", "."]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "System Resource Utilization (%)",
+                "yAxis": {
+                  "left": {
+                    "min": 0,
+                    "max": 100
+                  }
+                }
+              }
+            },
+            {
+              "type": "log",
+              "x": 0,
+              "y": 12,
+              "width": 24,
+              "height": 6,
+              "properties": {
+                "query": "SOURCE '/aws/multilingual-inference/${Environment}/inference'\n| fields @timestamp, message\n| filter @message like /ERROR/\n| sort @timestamp desc\n| limit 100",
+                "region": "${AWS::Region}",
+                "title": "Recent Error Logs",
+                "view": "table"
+              }
+            }
+          ]
+        }
+
+  # CloudWatch Alarms
+  HighInferenceLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-HighInferenceLatency'
+      AlarmDescription: 'Alert when inference latency is high'
+      MetricName: InferenceLatency
+      Namespace: MultilingualInference
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5000
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      TreatMissingData: notBreaching
+
+  LowInferenceConfidenceAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-LowInferenceConfidence'
+      AlarmDescription: 'Alert when inference confidence is consistently low'
+      MetricName: InferenceConfidence
+      Namespace: MultilingualInference
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 0.5
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      TreatMissingData: notBreaching
+
+  AgentUnhealthyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-AgentUnhealthy'
+      AlarmDescription: 'Alert when agents are unhealthy'
+      MetricName: AgentHealth
+      Namespace: MultilingualInference
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 0.5
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      TreatMissingData: notBreaching
+
+  HighErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-HighErrorRate'
+      AlarmDescription: 'Alert when error rate is high'
+      MetricName: ErrorCount
+      Namespace: MultilingualInference
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      TreatMissingData: notBreaching
+
+  HighCPUUtilizationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-HighCPUUtilization'
+      AlarmDescription: 'Alert when CPU utilization is high'
+      MetricName: CPUUtilization
+      Namespace: MultilingualInference
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      TreatMissingData: notBreaching
+
+  HighMemoryUtilizationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-HighMemoryUtilization'
+      AlarmDescription: 'Alert when memory utilization is high'
+      MetricName: MemoryUtilization
+      Namespace: MultilingualInference
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 85
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      TreatMissingData: notBreaching
+
+  # Custom Metric Filters for Log-based Metrics
+  ErrorLogMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref InferenceLogGroup
+      FilterPattern: '[timestamp, request_id, level="ERROR", ...]'
+      MetricTransformations:
+        - MetricNamespace: MultilingualInference
+          MetricName: LogErrors
+          MetricValue: '1'
+          DefaultValue: 0
+
+  TimeoutLogMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref AgentLogGroup
+      FilterPattern: '[timestamp, request_id, level, message="*timeout*"]'
+      MetricTransformations:
+        - MetricNamespace: MultilingualInference
+          MetricName: TimeoutErrors
+          MetricValue: '1'
+          DefaultValue: 0
+
+  CircuitBreakerLogMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref OrchestratorLogGroup
+      FilterPattern: '[timestamp, request_id, level, message="*circuit*breaker*"]'
+      MetricTransformations:
+        - MetricNamespace: MultilingualInference
+          MetricName: CircuitBreakerEvents
+          MetricValue: '1'
+          DefaultValue: 0
+
+  # IAM Role for CloudWatch Agent (if needed)
+  CloudWatchAgentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Environment}-multilingual-inference-cloudwatch-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: CustomMetricsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogStreams
+                Resource: '*'
+
+  CloudWatchAgentInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub '${Environment}-multilingual-inference-cloudwatch-profile'
+      Roles:
+        - !Ref CloudWatchAgentRole
+
+Outputs:
+  DashboardURL:
+    Description: 'URL to the CloudWatch Dashboard'
+    Value: !Sub 'https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${Environment}-${DashboardName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-DashboardURL'
+
+  AlarmTopicArn:
+    Description: 'ARN of the SNS topic for alarm notifications'
+    Value: !Ref AlarmNotificationTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-AlarmTopicArn'
+
+  InferenceLogGroupName:
+    Description: 'Name of the inference log group'
+    Value: !Ref InferenceLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-InferenceLogGroup'
+
+  AgentLogGroupName:
+    Description: 'Name of the agent log group'
+    Value: !Ref AgentLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-AgentLogGroup'
+
+  CloudWatchRoleArn:
+    Description: 'ARN of the CloudWatch IAM role'
+    Value: !GetAtt CloudWatchAgentRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudWatchRoleArn'

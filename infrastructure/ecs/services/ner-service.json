@@ -1,0 +1,50 @@
+{
+  "serviceName": "multilingual-inference-ner",
+  "cluster": "multilingual-inference-cluster",
+  "taskDefinition": "multilingual-inference-ner",
+  "desiredCount": 1,
+  "launchType": "FARGATE",
+  "platformVersion": "LATEST",
+  "networkConfiguration": {
+    "awsvpcConfiguration": {
+      "subnets": [
+        "subnet-XXXXXXXXX",
+        "subnet-YYYYYYYYY"
+      ],
+      "securityGroups": [
+        "sg-XXXXXXXXX"
+      ],
+      "assignPublicIp": "ENABLED"
+    }
+  },
+  "serviceRegistries": [
+    {
+      "registryArn": "arn:aws:servicediscovery:us-east-1:ACCOUNT_ID:service/srv-YYYYYYYYY",
+      "containerName": "ner-agent",
+      "containerPort": 8081
+    }
+  ],
+  "deploymentConfiguration": {
+    "maximumPercent": 200,
+    "minimumHealthyPercent": 50,
+    "deploymentCircuitBreaker": {
+      "enable": true,
+      "rollback": true
+    }
+  },
+  "enableExecuteCommand": true,
+  "tags": [
+    {
+      "key": "Environment",
+      "value": "production"
+    },
+    {
+      "key": "Service",
+      "value": "ner"
+    },
+    {
+      "key": "Platform",
+      "value": "ARM64"
+    }
+  ]
+}

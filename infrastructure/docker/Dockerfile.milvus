@@ -1,0 +1,27 @@
+# Dockerfile for Milvus Vector Database - ARM64 platform
+FROM --platform=linux/arm64 milvusdb/milvus:v2.3.4
+
+# Set working directory
+WORKDIR /milvus
+
+# Copy custom Milvus configuration
+COPY infrastructure/milvus/milvus.yaml /milvus/configs/milvus.yaml
+
+# Create data directories with proper permissions
+RUN mkdir -p /var/lib/milvus/data \
+    && mkdir -p /var/lib/milvus/logs \
+    && mkdir -p /var/lib/milvus/wal \
+    && chown -R milvus:milvus /var/lib/milvus
+
+# Expose Milvus ports
+EXPOSE 19530 9091
+
+# Health check for Milvus
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD curl -f http://localhost:9091/healthz || exit 1
+
+# Set environment variables
+ENV MILVUS_CONFIG_PATH=/milvus/configs/milvus.yaml
+
+# Run Milvus server
+CMD ["milvus", "run", "standalone"]

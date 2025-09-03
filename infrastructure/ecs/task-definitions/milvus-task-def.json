@@ -1,0 +1,186 @@
+{
+  "family": "multilingual-inference-milvus",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "2048",
+  "memory": "4096",
+  "runtimePlatform": {
+    "cpuArchitecture": "ARM64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/multilingual-inference-task-role",
+  "volumes": [
+    {
+      "name": "milvus-data",
+      "efsVolumeConfiguration": {
+        "fileSystemId": "fs-XXXXXXXXX",
+        "rootDirectory": "/milvus-data",
+        "transitEncryption": "ENABLED",
+        "authorizationConfig": {
+          "accessPointId": "fsap-XXXXXXXXX",
+          "iam": "ENABLED"
+        }
+      }
+    },
+    {
+      "name": "milvus-logs",
+      "efsVolumeConfiguration": {
+        "fileSystemId": "fs-XXXXXXXXX",
+        "rootDirectory": "/milvus-logs",
+        "transitEncryption": "ENABLED",
+        "authorizationConfig": {
+          "accessPointId": "fsap-YYYYYYYYY",
+          "iam": "ENABLED"
+        }
+      }
+    }
+  ],
+  "containerDefinitions": [
+    {
+      "name": "milvus-standalone",
+      "image": "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/multilingual-inference-milvus:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 19530,
+          "protocol": "tcp"
+        },
+        {
+          "containerPort": 9091,
+          "protocol": "tcp"
+        }
+      ],
+      "mountPoints": [
+        {
+          "sourceVolume": "milvus-data",
+          "containerPath": "/var/lib/milvus/data",
+          "readOnly": false
+        },
+        {
+          "sourceVolume": "milvus-logs",
+          "containerPath": "/var/lib/milvus/logs",
+          "readOnly": false
+        }
+      ],
+      "environment": [
+        {
+          "name": "MILVUS_CONFIG_PATH",
+          "value": "/milvus/configs/milvus.yaml"
+        },
+        {
+          "name": "ETCD_ENDPOINTS",
+          "value": "localhost:2379"
+        },
+        {
+          "name": "MINIO_ADDRESS",
+          "value": "localhost:9000"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/multilingual-inference-milvus",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:9091/healthz || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 10,
+        "retries": 3,
+        "startPeriod": 120
+      }
+    },
+    {
+      "name": "etcd",
+      "image": "quay.io/coreos/etcd:v3.5.5-arm64",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 2379,
+          "protocol": "tcp"
+        },
+        {
+          "containerPort": 2380,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "ETCD_AUTO_COMPACTION_MODE",
+          "value": "revision"
+        },
+        {
+          "name": "ETCD_AUTO_COMPACTION_RETENTION",
+          "value": "1000"
+        },
+        {
+          "name": "ETCD_QUOTA_BACKEND_BYTES",
+          "value": "4294967296"
+        },
+        {
+          "name": "ETCD_SNAPSHOT_COUNT",
+          "value": "50000"
+        }
+      ],
+      "command": [
+        "etcd",
+        "-advertise-client-urls=http://127.0.0.1:2379",
+        "-listen-client-urls=http://0.0.0.0:2379",
+        "--data-dir=/etcd"
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/multilingual-inference-milvus",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "etcd"
+        }
+      }
+    },
+    {
+      "name": "minio",
+      "image": "minio/minio:RELEASE.2023-03-20T20-16-18Z-arm64",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 9000,
+          "protocol": "tcp"
+        },
+        {
+          "containerPort": 9001,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "MINIO_ACCESS_KEY",
+          "value": "minioadmin"
+        },
+        {
+          "name": "MINIO_SECRET_KEY",
+          "value": "minioadmin"
+        }
+      ],
+      "command": [
+        "server",
+        "/data",
+        "--console-address",
+        ":9001"
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/multilingual-inference-milvus",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "minio"
+        }
+      }
+    }
+  ]
+}

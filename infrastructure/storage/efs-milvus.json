@@ -1,0 +1,114 @@
+{
+  "fileSystemPolicy": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Principal": {
+          "AWS": "*"
+        },
+        "Action": [
+          "elasticfilesystem:ClientMount",
+          "elasticfilesystem:ClientWrite",
+          "elasticfilesystem:ClientRootAccess"
+        ],
+        "Resource": "*",
+        "Condition": {
+          "Bool": {
+            "aws:SecureTransport": "true"
+          }
+        }
+      }
+    ]
+  },
+  "fileSystemConfiguration": {
+    "creationToken": "multilingual-inference-milvus-data",
+    "performanceMode": "generalPurpose",
+    "throughputMode": "provisioned",
+    "provisionedThroughputInMibps": 100,
+    "encrypted": true,
+    "kmsKeyId": "alias/aws/elasticfilesystem",
+    "tags": [
+      {
+        "key": "Name",
+        "value": "multilingual-inference-milvus-storage"
+      },
+      {
+        "key": "Environment",
+        "value": "production"
+      },
+      {
+        "key": "Service",
+        "value": "milvus"
+      },
+      {
+        "key": "Platform",
+        "value": "ARM64"
+      }
+    ]
+  },
+  "accessPoints": [
+    {
+      "name": "milvus-data-access-point",
+      "path": "/milvus-data",
+      "posixUser": {
+        "uid": 1000,
+        "gid": 1000
+      },
+      "rootDirectory": {
+        "path": "/milvus-data",
+        "creationInfo": {
+          "ownerUid": 1000,
+          "ownerGid": 1000,
+          "permissions": "755"
+        }
+      },
+      "tags": [
+        {
+          "key": "Name",
+          "value": "milvus-data-access-point"
+        },
+        {
+          "key": "Purpose",
+          "value": "milvus-data-storage"
+        }
+      ]
+    },
+    {
+      "name": "milvus-logs-access-point",
+      "path": "/milvus-logs",
+      "posixUser": {
+        "uid": 1000,
+        "gid": 1000
+      },
+      "rootDirectory": {
+        "path": "/milvus-logs",
+        "creationInfo": {
+          "ownerUid": 1000,
+          "ownerGid": 1000,
+          "permissions": "755"
+        }
+      },
+      "tags": [
+        {
+          "key": "Name",
+          "value": "milvus-logs-access-point"
+        },
+        {
+          "key": "Purpose",
+          "value": "milvus-logs-storage"
+        }
+      ]
+    }
+  ],
+  "mountTargets": [
+    {
+      "subnetId": "subnet-XXXXXXXXX",
+      "securityGroups": ["sg-XXXXXXXXX"]
+    },
+    {
+      "subnetId": "subnet-YYYYYYYYY", 
+      "securityGroups": ["sg-XXXXXXXXX"]
+    }
+  ]
+}

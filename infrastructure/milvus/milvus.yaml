@@ -1,0 +1,85 @@
+# Milvus configuration for multilingual inference system
+# Optimized for ARM64 ECS deployment
+
+etcd:
+  endpoints:
+    - localhost:2379
+  rootPath: by-dev
+  metaSubPath: meta
+  kvSubPath: kv
+
+minio:
+  address: localhost
+  port: 9000
+  accessKeyID: minioadmin
+  secretAccessKey: minioadmin
+  useSSL: false
+  bucketName: "milvus-bucket"
+  rootPath: file
+
+mq:
+  type: rocksmq
+  rocksmq:
+    path: /var/lib/milvus/rdb_data
+
+rootCoord:
+  address: localhost
+  port: 53100
+  enableActiveStandby: false
+
+proxy:
+  port: 19530
+  internalPort: 19529
+
+queryCoord:
+  address: localhost
+  port: 19531
+  enableActiveStandby: false
+
+queryNode:
+  cacheSize: 32
+
+indexCoord:
+  address: localhost
+  port: 31000
+  enableActiveStandby: false
+
+indexNode:
+  port: 21121
+
+dataCoord:
+  address: localhost
+  port: 13333
+  enableActiveStandby: false
+
+dataNode:
+  port: 21124
+
+log:
+  level: info
+  file:
+    rootPath: /var/lib/milvus/logs
+    maxSize: 300
+    maxAge: 10
+    maxBackups: 20
+
+# Performance tuning for ARM64
+common:
+  defaultPartitionName: "_default"
+  defaultIndexName: "_default_idx"
+  entityExpiration: -1
+  indexSliceSize: 16
+  
+# Memory settings optimized for ECS Fargate
+queryNode:
+  gracefulTime: 1000
+  gracefulStopTimeout: 30
+  
+# Storage settings
+localStorage:
+  path: /var/lib/milvus/data
+
+# Metrics and monitoring
+metrics:
+  enableMetrics: true
+  port: 9091

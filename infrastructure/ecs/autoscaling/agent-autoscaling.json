@@ -1,0 +1,92 @@
+{
+  "agents": {
+    "ner": {
+      "serviceNamespace": "ecs",
+      "resourceId": "service/multilingual-inference-cluster/multilingual-inference-ner",
+      "scalableDimension": "ecs:service:DesiredCount",
+      "minCapacity": 1,
+      "maxCapacity": 5,
+      "roleArn": "arn:aws:iam::ACCOUNT_ID:role/application-autoscaling-ecs-service",
+      "scalingPolicies": [
+        {
+          "policyName": "ner-scale-up",
+          "policyType": "TargetTrackingScaling",
+          "targetTrackingScalingPolicyConfiguration": {
+            "targetValue": 70.0,
+            "predefinedMetricSpecification": {
+              "predefinedMetricType": "ECSServiceAverageCPUUtilization"
+            },
+            "scaleOutCooldown": 300,
+            "scaleInCooldown": 300
+          }
+        }
+      ]
+    },
+    "rag": {
+      "serviceNamespace": "ecs",
+      "resourceId": "service/multilingual-inference-cluster/multilingual-inference-rag",
+      "scalableDimension": "ecs:service:DesiredCount",
+      "minCapacity": 1,
+      "maxCapacity": 5,
+      "roleArn": "arn:aws:iam::ACCOUNT_ID:role/application-autoscaling-ecs-service",
+      "scalingPolicies": [
+        {
+          "policyName": "rag-scale-up",
+          "policyType": "TargetTrackingScaling",
+          "targetTrackingScalingPolicyConfiguration": {
+            "targetValue": 70.0,
+            "predefinedMetricSpecification": {
+              "predefinedMetricType": "ECSServiceAverageCPUUtilization"
+            },
+            "scaleOutCooldown": 300,
+            "scaleInCooldown": 300
+          }
+        }
+      ]
+    },
+    "llm": {
+      "serviceNamespace": "ecs",
+      "resourceId": "service/multilingual-inference-cluster/multilingual-inference-llm",
+      "scalableDimension": "ecs:service:DesiredCount",
+      "minCapacity": 1,
+      "maxCapacity": 3,
+      "roleArn": "arn:aws:iam::ACCOUNT_ID:role/application-autoscaling-ecs-service",
+      "scalingPolicies": [
+        {
+          "policyName": "llm-scale-up",
+          "policyType": "TargetTrackingScaling",
+          "targetTrackingScalingPolicyConfiguration": {
+            "targetValue": 60.0,
+            "predefinedMetricSpecification": {
+              "predefinedMetricType": "ECSServiceAverageCPUUtilization"
+            },
+            "scaleOutCooldown": 600,
+            "scaleInCooldown": 600
+          }
+        }
+      ]
+    },
+    "hybrid": {
+      "serviceNamespace": "ecs",
+      "resourceId": "service/multilingual-inference-cluster/multilingual-inference-hybrid",
+      "scalableDimension": "ecs:service:DesiredCount",
+      "minCapacity": 1,
+      "maxCapacity": 4,
+      "roleArn": "arn:aws:iam::ACCOUNT_ID:role/application-autoscaling-ecs-service",
+      "scalingPolicies": [
+        {
+          "policyName": "hybrid-scale-up",
+          "policyType": "TargetTrackingScaling",
+          "targetTrackingScalingPolicyConfiguration": {
+            "targetValue": 65.0,
+            "predefinedMetricSpecification": {
+              "predefinedMetricType": "ECSServiceAverageCPUUtilization"
+            },
+            "scaleOutCooldown": 300,
+            "scaleInCooldown": 300
+          }
+        }
+      ]
+    }
+  }
+}

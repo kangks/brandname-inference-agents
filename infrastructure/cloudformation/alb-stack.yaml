@@ -1,0 +1,257 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Application Load Balancer and API Gateway stack for multilingual inference system'
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Environment name
+  
+  VpcId:
+    Type: String
+    Description: VPC ID
+  
+  PublicSubnet1Id:
+    Type: String
+    Description: Public Subnet 1 ID
+  
+  PublicSubnet2Id:
+    Type: String
+    Description: Public Subnet 2 ID
+  
+  ALBSecurityGroupId:
+    Type: String
+    Description: ALB Security Group ID
+
+Resources:
+  # Application Load Balancer
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${Environment}-alb'
+      Scheme: internet-facing
+      Type: application
+      IpAddressType: ipv4
+      Subnets:
+        - !Ref PublicSubnet1Id
+        - !Ref PublicSubnet2Id
+      SecurityGroups:
+        - !Ref ALBSecurityGroupId
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-alb'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Target Groups
+  OrchestratorTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${Environment}-orchestrator-tg'
+      Port: 8080
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+      TargetType: ip
+      HealthCheckEnabled: true
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: '200'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-orchestrator-tg'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Service
+          Value: orchestrator
+
+  NERTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${Environment}-ner-tg'
+      Port: 8081
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+      TargetType: ip
+      HealthCheckEnabled: true
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: '200'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ner-tg'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Service
+          Value: ner
+
+  RAGTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${Environment}-rag-tg'
+      Port: 8082
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+      TargetType: ip
+      HealthCheckEnabled: true
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: '200'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-rag-tg'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Service
+          Value: rag
+
+  LLMTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${Environment}-llm-tg'
+      Port: 8083
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+      TargetType: ip
+      HealthCheckEnabled: true
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: '200'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-llm-tg'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Service
+          Value: llm
+
+  HybridTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${Environment}-hybrid-tg'
+      Port: 8084
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+      TargetType: ip
+      HealthCheckEnabled: true
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: '200'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-hybrid-tg'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Service
+          Value: hybrid
+
+  # ALB Listener
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref OrchestratorTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  # ALB Listener Rules
+  NERListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref NERTargetGroup
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - '/ner/*'
+      ListenerArn: !Ref ALBListener
+      Priority: 100
+
+  RAGListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref RAGTargetGroup
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - '/rag/*'
+      ListenerArn: !Ref ALBListener
+      Priority: 200
+
+  LLMListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref LLMTargetGroup
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - '/llm/*'
+      ListenerArn: !Ref ALBListener
+      Priority: 300
+
+  HybridListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref HybridTargetGroup
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - '/hybrid/*'
+      ListenerArn: !Ref ALBListener
+      Priority: 400
+
+  # Note: API Gateway components removed for initial deployment
+  # Can be added later once ALB is working
+
+Outputs:
+  LoadBalancerDNS:
+    Description: Application Load Balancer DNS Name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${AWS::StackName}-LoadBalancerDNS'
+
+  LoadBalancerArn:
+    Description: Application Load Balancer ARN
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub '${AWS::StackName}-LoadBalancerArn'
+
+  OrchestratorTargetGroupArn:
+    Description: Orchestrator Target Group ARN
+    Value: !Ref OrchestratorTargetGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-OrchestratorTargetGroupArn'
+
+  # API Gateway outputs removed for initial deployment

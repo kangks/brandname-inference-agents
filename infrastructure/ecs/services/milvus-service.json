@@ -1,0 +1,60 @@
+{
+  "serviceName": "multilingual-inference-milvus",
+  "cluster": "multilingual-inference-cluster",
+  "taskDefinition": "multilingual-inference-milvus",
+  "desiredCount": 1,
+  "launchType": "FARGATE",
+  "platformVersion": "LATEST",
+  "networkConfiguration": {
+    "awsvpcConfiguration": {
+      "subnets": [
+        "subnet-XXXXXXXXX",
+        "subnet-YYYYYYYYY"
+      ],
+      "securityGroups": [
+        "sg-XXXXXXXXX"
+      ],
+      "assignPublicIp": "ENABLED"
+    }
+  },
+  "serviceRegistries": [
+    {
+      "registryArn": "arn:aws:servicediscovery:us-east-1:ACCOUNT_ID:service/srv-MILVUS",
+      "containerName": "milvus-standalone",
+      "containerPort": 19530
+    }
+  ],
+  "deploymentConfiguration": {
+    "maximumPercent": 100,
+    "minimumHealthyPercent": 0,
+    "deploymentCircuitBreaker": {
+      "enable": true,
+      "rollback": true
+    }
+  },
+  "enableExecuteCommand": true,
+  "placementStrategy": [
+    {
+      "type": "spread",
+      "field": "attribute:ecs.availability-zone"
+    }
+  ],
+  "tags": [
+    {
+      "key": "Environment",
+      "value": "production"
+    },
+    {
+      "key": "Service",
+      "value": "milvus"
+    },
+    {
+      "key": "Platform",
+      "value": "ARM64"
+    },
+    {
+      "key": "Backup",
+      "value": "enabled"
+    }
+  ]
+}

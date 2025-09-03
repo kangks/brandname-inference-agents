@@ -1,0 +1,515 @@
+"""
+Standalone inference agent for basic brand prediction.
+
+This module provides a simple inference capability that can work without
+the full multi-agent ecosystem, using basic pattern matching and rule-based
+brand detection for immediate deployment.
+"""
+
+import re
+import time
+from typing import Dict, Any, List, Tuple, Optional
+import logging
+
+from ..models.data_models import ProductInput, InferenceResult, LanguageHint
+from .base_agent import BaseAgent, AgentError
+
+
+class StandaloneInferenceAgent(BaseAgent):
+    """
+    Standalone inference agent providing basic brand prediction.
+    
+    Uses pattern matching, keyword detection, and rule-based inference
+    to provide immediate brand predictions without external dependencies.
+    """
+    
+    def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
+        """Initialize standalone inference agent."""
+        super().__init__("standalone_inference", config or {})
+        
+        # Load brand patterns and keywords
+        self.brand_patterns = self._load_brand_patterns()
+        self.brand_keywords = self._load_brand_keywords()
+        self.language_patterns = self._load_language_patterns()
+        
+        # Configuration
+        self.confidence_threshold = self.get_config_value("confidence_threshold", 0.6)
+        self.enable_fuzzy_matching = self.get_config_value("enable_fuzzy_matching", True)
+        self.enable_language_detection = self.get_config_value("enable_language_detection", True)
+    
+    async def initialize(self) -> None:
+        """Initialize the standalone agent."""
+        try:
+            # Validate patterns are loaded
+            if not self.brand_patterns:
+                self.logger.warning("No brand patterns loaded, using minimal set")
+                self.brand_patterns = self._get_minimal_brand_patterns()
+            
+            self.set_initialized(True)
+            self.logger.info(f"Standalone inference agent initialized with {len(self.brand_patterns)} brand patterns")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to initialize standalone agent: {str(e)}")
+            raise AgentError(self.agent_name, f"Initialization failed: {str(e)}", e)
+    
+    async def process(self, input_data: ProductInput) -> Dict[str, Any]:
+        """
+        Process product input and return brand prediction.
+        
+        Args:
+            input_data: Product input data
+            
+        Returns:
+            Dictionary containing inference results
+        """
+        start_time = time.time()
+        
+        try:
+            if not self._is_initialized:
+                raise AgentError(self.agent_name, "Agent not initialized")
+            
+            # Perform standalone inference
+            result = await self.predict_brand(
+                input_data.product_name,
+                input_data.language_hint
+            )
+            
+            processing_time = time.time() - start_time
+            
+            return {
+                "product_name": input_data.product_name,
+                "language": input_data.language_hint.value,
+                "brand_predictions": [{
+                    "brand": result["predicted_brand"],
+                    "confidence": result["confidence"],
+                    "method": result["method"]
+                }],
+                "entities": result.get("entities", []),
+                "processing_time_ms": int(processing_time * 1000),
+                "agent_used": "standalone",
+                "timestamp": time.time()
+            }
+            
+        except Exception as e:
+            processing_time = time.time() - start_time
+            self.logger.error(f"Standalone inference failed: {str(e)}")
+            
+            return {
+                "product_name": input_data.product_name,
+                "error": str(e),
+                "processing_time_ms": int(processing_time * 1000),
+                "agent_used": "standalone",
+                "timestamp": time.time()
+            }
+    
+    async def predict_brand(
+        self, 
+        product_name: str, 
+        language_hint: LanguageHint = LanguageHint.AUTO
+    ) -> Dict[str, Any]:
+        """
+        Predict brand from product name using standalone inference.
+        
+        Args:
+            product_name: Input product name
+            language_hint: Language hint for processing
+            
+        Returns:
+            Dictionary containing prediction results
+        """
+        if not product_name or not product_name.strip():
+            raise AgentError(self.agent_name, "Product name cannot be empty")
+        
+        product_name = product_name.strip()
+        
+        # Detect language if needed
+        detected_language = self._detect_language(product_name, language_hint)
+        
+        # Extract entities and brands
+        entities = self._extract_entities(product_name, detected_language)
+        
+        # Find brand matches using multiple methods
+        brand_candidates = []
+        
+        # Method 1: Exact pattern matching
+        exact_matches = self._find_exact_matches(product_name)
+        brand_candidates.extend(exact_matches)
+        
+        # Method 2: Keyword matching
+        keyword_matches = self._find_keyword_matches(product_name, detected_language)
+        brand_candidates.extend(keyword_matches)
+        
+        # Method 3: Fuzzy matching (if enabled)
+        if self.enable_fuzzy_matching:
+            fuzzy_matches = self._find_fuzzy_matches(product_name)
+            brand_candidates.extend(fuzzy_matches)
+        
+        # Method 4: Pattern-based extraction
+        pattern_matches = self._find_pattern_matches(product_name, detected_language)
+        brand_candidates.extend(pattern_matches)
+        
+        # Select best brand prediction
+        predicted_brand, confidence, method = self._select_best_prediction(brand_candidates)
+        
+        return {
+            "predicted_brand": predicted_brand,
+            "confidence": confidence,
+            "method": method,
+            "entities": entities,
+            "language": detected_language,
+            "candidates": brand_candidates[:5]  # Top 5 candidates
+        }
+    
+    def _load_brand_patterns(self) -> Dict[str, Dict[str, Any]]:
+        """Load brand patterns for matching."""
+        return {
+            # Technology brands
+            "apple": {
+                "patterns": [r"\biphone\b", r"\bipad\b", r"\bmac\b", r"\bapple\b"],
+                "keywords": ["iphone", "ipad", "macbook", "apple", "ios"],
+                "confidence_boost": 0.9
+            },
+            "samsung": {
+                "patterns": [r"\bsamsung\b", r"\bgalaxy\b"],
+                "keywords": ["samsung", "galaxy", "note"],
+                "confidence_boost": 0.9
+            },
+            "sony": {
+                "patterns": [r"\bsony\b", r"\bplaystation\b", r"\bps\d\b"],
+                "keywords": ["sony", "playstation", "bravia", "xperia"],
+                "confidence_boost": 0.85
+            },
+            "nike": {
+                "patterns": [r"\bnike\b", r"\bair jordan\b", r"\bjordan\b"],
+                "keywords": ["nike", "jordan", "air max", "dunk"],
+                "confidence_boost": 0.85
+            },
+            "adidas": {
+                "patterns": [r"\badidas\b", r"\byeezy\b"],
+                "keywords": ["adidas", "yeezy", "ultraboost", "stan smith"],
+                "confidence_boost": 0.85
+            },
+            
+            # Consumer goods
+            "colgate": {
+                "patterns": [r"\bcolgate\b", r"ยาสีฟัน.*colgate", r"colgate.*total"],
+                "keywords": ["colgate", "total", "ยาสีฟัน"],
+                "confidence_boost": 0.8
+            },
+            "coca-cola": {
+                "patterns": [r"\bcoca.?cola\b", r"\bcoke\b", r"\bโค้ก\b"],
+                "keywords": ["coca-cola", "coke", "โค้ก", "zero"],
+                "confidence_boost": 0.8
+            },
+            "pepsi": {
+                "patterns": [r"\bpepsi\b", r"\bเป๊ปซี่\b"],
+                "keywords": ["pepsi", "เป๊ปซี่", "max"],
+                "confidence_boost": 0.8
+            },
+            
+            # Automotive
+            "toyota": {
+                "patterns": [r"\btoyota\b", r"\bcamry\b", r"\bcorolla\b"],
+                "keywords": ["toyota", "camry", "corolla", "prius"],
+                "confidence_boost": 0.85
+            },
+            "honda": {
+                "patterns": [r"\bhonda\b", r"\baccord\b", r"\bcivic\b"],
+                "keywords": ["honda", "accord", "civic", "cr-v"],
+                "confidence_boost": 0.85
+            },
+            
+            # Fashion
+            "louis vuitton": {
+                "patterns": [r"\blouis.?vuitton\b", r"\blv\b"],
+                "keywords": ["louis vuitton", "lv", "neverfull"],
+                "confidence_boost": 0.9
+            },
+            "gucci": {
+                "patterns": [r"\bgucci\b"],
+                "keywords": ["gucci", "gg"],
+                "confidence_boost": 0.9
+            },
+            
+            # Additional technology brands
+            "microsoft": {
+                "patterns": [r"\bmicrosoft\b", r"\bsurface\b", r"\bxbox\b", r"\bwindows\b"],
+                "keywords": ["microsoft", "surface", "xbox", "windows", "office"],
+                "confidence_boost": 0.9
+            },
+            "google": {
+                "patterns": [r"\bgoogle\b", r"\bpixel\b", r"\bandroid\b"],
+                "keywords": ["google", "pixel", "android", "chrome", "gmail"],
+                "confidence_boost": 0.9
+            }
+        }
+    
+    def _load_brand_keywords(self) -> Dict[str, List[str]]:
+        """Load brand-specific keywords."""
+        return {
+            "technology": ["smartphone", "laptop", "tablet", "computer", "phone"],
+            "fashion": ["bag", "shoes", "clothing", "watch", "jewelry"],
+            "automotive": ["car", "vehicle", "auto", "รถ"],
+            "food": ["drink", "beverage", "food", "snack", "อาหาร"],
+            "cosmetics": ["toothpaste", "shampoo", "soap", "ยาสีฟัน", "แชมพู"]
+        }
+    
+    def _load_language_patterns(self) -> Dict[str, List[str]]:
+        """Load language detection patterns."""
+        return {
+            "thai": [r"[ก-๙]", r"ยาสีฟัน", r"แชมพู", r"โค้ก", r"เป๊ปซี่"],
+            "english": [r"[a-zA-Z]"],
+            "chinese": [r"[\u4e00-\u9fff]"],
+            "japanese": [r"[\u3040-\u309f\u30a0-\u30ff]"]
+        }
+    
+    def _get_minimal_brand_patterns(self) -> Dict[str, Dict[str, Any]]:
+        """Get minimal brand patterns as fallback."""
+        return {
+            "apple": {
+                "patterns": [r"\biphone\b", r"\bapple\b"],
+                "keywords": ["iphone", "apple"],
+                "confidence_boost": 0.8
+            },
+            "samsung": {
+                "patterns": [r"\bsamsung\b", r"\bgalaxy\b"],
+                "keywords": ["samsung", "galaxy"],
+                "confidence_boost": 0.8
+            }
+        }
+    
+    def _detect_language(self, text: str, language_hint: LanguageHint) -> str:
+        """Detect language of the input text."""
+        if language_hint != LanguageHint.AUTO:
+            return language_hint.value
+        
+        if not self.enable_language_detection:
+            return "en"
+        
+        # Simple language detection based on character patterns
+        for language, patterns in self.language_patterns.items():
+            for pattern in patterns:
+                if re.search(pattern, text):
+                    return language
+        
+        return "en"  # Default to English
+    
+    def _extract_entities(self, text: str, language: str) -> List[Dict[str, Any]]:
+        """Extract basic entities from text."""
+        entities = []
+        
+        # Extract potential brand names (capitalized words)
+        brand_pattern = r'\b[A-Z][a-zA-Z]+\b'
+        matches = re.finditer(brand_pattern, text)
+        
+        for match in matches:
+            entity_text = match.group()
+            if len(entity_text) > 2:  # Filter out short matches
+                entities.append({
+                    "text": entity_text,
+                    "label": "BRAND",
+                    "confidence": 0.7,
+                    "start": match.start(),
+                    "end": match.end()
+                })
+        
+        # Extract product indicators
+        product_indicators = ["pro", "max", "plus", "ultra", "mini", "air"]
+        for indicator in product_indicators:
+            if indicator.lower() in text.lower():
+                entities.append({
+                    "text": indicator,
+                    "label": "PRODUCT",
+                    "confidence": 0.6
+                })
+        
+        return entities
+    
+    def _find_exact_matches(self, text: str) -> List[Dict[str, Any]]:
+        """Find exact brand pattern matches."""
+        candidates = []
+        text_lower = text.lower()
+        
+        for brand_name, brand_info in self.brand_patterns.items():
+            for pattern in brand_info["patterns"]:
+                if re.search(pattern, text_lower, re.IGNORECASE):
+                    confidence = brand_info["confidence_boost"]
+                    candidates.append({
+                        "brand": brand_name,
+                        "confidence": confidence,
+                        "method": "exact_pattern",
+                        "pattern": pattern
+                    })
+        
+        return candidates
+    
+    def _find_keyword_matches(self, text: str, language: str) -> List[Dict[str, Any]]:
+        """Find brand matches using keyword matching."""
+        candidates = []
+        text_lower = text.lower()
+        
+        for brand_name, brand_info in self.brand_patterns.items():
+            for keyword in brand_info["keywords"]:
+                if keyword.lower() in text_lower:
+                    # Calculate confidence based on keyword match quality
+                    confidence = brand_info["confidence_boost"] * 0.8
+                    
+                    # Boost confidence for exact word matches
+                    if re.search(rf'\b{re.escape(keyword.lower())}\b', text_lower):
+                        confidence *= 1.1
+                    
+                    candidates.append({
+                        "brand": brand_name,
+                        "confidence": min(1.0, confidence),
+                        "method": "keyword_match",
+                        "keyword": keyword
+                    })
+        
+        return candidates
+    
+    def _find_fuzzy_matches(self, text: str) -> List[Dict[str, Any]]:
+        """Find fuzzy brand matches."""
+        candidates = []
+        
+        # Simple fuzzy matching using edit distance approximation
+        words = re.findall(r'\b\w+\b', text.lower())
+        
+        for word in words:
+            if len(word) < 3:
+                continue
+                
+            for brand_name in self.brand_patterns.keys():
+                # Simple similarity check
+                similarity = self._calculate_similarity(word, brand_name)
+                
+                if similarity > 0.7:
+                    confidence = similarity * 0.6  # Lower confidence for fuzzy matches
+                    candidates.append({
+                        "brand": brand_name,
+                        "confidence": confidence,
+                        "method": "fuzzy_match",
+                        "similarity": similarity
+                    })
+        
+        return candidates
+    
+    def _find_pattern_matches(self, text: str, language: str) -> List[Dict[str, Any]]:
+        """Find matches using language-specific patterns."""
+        candidates = []
+        
+        # Thai-specific patterns
+        if language == "th":
+            # Look for Thai brand indicators
+            thai_patterns = {
+                "colgate": [r"ยาสีฟัน.*colgate", r"colgate.*total"],
+                "coca-cola": [r"โค้ก", r"coca.*cola"]
+            }
+            
+            for brand, patterns in thai_patterns.items():
+                for pattern in patterns:
+                    if re.search(pattern, text, re.IGNORECASE):
+                        candidates.append({
+                            "brand": brand,
+                            "confidence": 0.85,
+                            "method": "thai_pattern",
+                            "pattern": pattern
+                        })
+        
+        return candidates
+    
+    def _calculate_similarity(self, word1: str, word2: str) -> float:
+        """Calculate simple similarity between two words."""
+        if word1 == word2:
+            return 1.0
+        
+        # Simple Jaccard similarity using character bigrams
+        def get_bigrams(s):
+            return set(s[i:i+2] for i in range(len(s)-1))
+        
+        bigrams1 = get_bigrams(word1)
+        bigrams2 = get_bigrams(word2)
+        
+        if not bigrams1 and not bigrams2:
+            return 1.0
+        if not bigrams1 or not bigrams2:
+            return 0.0
+        
+        intersection = len(bigrams1 & bigrams2)
+        union = len(bigrams1 | bigrams2)
+        
+        return intersection / union if union > 0 else 0.0
+    
+    def _select_best_prediction(
+        self, 
+        candidates: List[Dict[str, Any]]
+    ) -> Tuple[str, float, str]:
+        """Select the best brand prediction from candidates."""
+        if not candidates:
+            return "Unknown", 0.0, "no_match"
+        
+        # Group candidates by brand and aggregate confidence
+        brand_scores = {}
+        brand_methods = {}
+        
+        for candidate in candidates:
+            brand = candidate["brand"]
+            confidence = candidate["confidence"]
+            method = candidate["method"]
+            
+            if brand in brand_scores:
+                # Take maximum confidence for the same brand
+                if confidence > brand_scores[brand]:
+                    brand_scores[brand] = confidence
+                    brand_methods[brand] = method
+            else:
+                brand_scores[brand] = confidence
+                brand_methods[brand] = method
+        
+        # Select brand with highest confidence
+        best_brand = max(brand_scores.keys(), key=lambda b: brand_scores[b])
+        best_confidence = brand_scores[best_brand]
+        best_method = brand_methods[best_brand]
+        
+        # Apply confidence threshold
+        if best_confidence < self.confidence_threshold:
+            return "Unknown", best_confidence, best_method
+        
+        return best_brand, best_confidence, best_method
+    
+    async def cleanup(self) -> None:
+        """Clean up standalone agent resources."""
+        self.brand_patterns.clear()
+        self.brand_keywords.clear()
+        self.language_patterns.clear()
+        self.set_initialized(False)
+        self.logger.info("Standalone inference agent cleaned up")
+    
+    async def _perform_health_check(self) -> None:
+        """Perform standalone agent health check."""
+        await super()._perform_health_check()
+        
+        # Check if patterns are loaded
+        if not self.brand_patterns:
+            raise RuntimeError("Brand patterns not loaded")
+        
+        # Test basic functionality
+        try:
+            test_result = await self.predict_brand("iPhone 15 Pro Max", LanguageHint.EN)
+            if not test_result:
+                raise RuntimeError("Basic inference test failed")
+        except Exception as e:
+            raise RuntimeError(f"Health check inference failed: {e}")
+
+
+# Factory function
+def create_standalone_agent(config: Optional[Dict[str, Any]] = None) -> StandaloneInferenceAgent:
+    """
+    Create a standalone inference agent.
+    
+    Args:
+        config: Optional configuration dictionary
+        
+    Returns:
+        Configured standalone inference agent
+    """
+    return StandaloneInferenceAgent(config)

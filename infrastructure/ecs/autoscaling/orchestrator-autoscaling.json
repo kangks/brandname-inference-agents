@@ -1,0 +1,52 @@
+{
+  "serviceNamespace": "ecs",
+  "resourceId": "service/multilingual-inference-cluster/multilingual-inference-orchestrator",
+  "scalableDimension": "ecs:service:DesiredCount",
+  "minCapacity": 2,
+  "maxCapacity": 10,
+  "roleArn": "arn:aws:iam::ACCOUNT_ID:role/application-autoscaling-ecs-service",
+  "scalingPolicies": [
+    {
+      "policyName": "orchestrator-scale-up",
+      "policyType": "TargetTrackingScaling",
+      "targetTrackingScalingPolicyConfiguration": {
+        "targetValue": 70.0,
+        "predefinedMetricSpecification": {
+          "predefinedMetricType": "ECSServiceAverageCPUUtilization"
+        },
+        "scaleOutCooldown": 300,
+        "scaleInCooldown": 300
+      }
+    },
+    {
+      "policyName": "orchestrator-memory-scale-up",
+      "policyType": "TargetTrackingScaling",
+      "targetTrackingScalingPolicyConfiguration": {
+        "targetValue": 80.0,
+        "predefinedMetricSpecification": {
+          "predefinedMetricType": "ECSServiceAverageMemoryUtilization"
+        },
+        "scaleOutCooldown": 300,
+        "scaleInCooldown": 300
+      }
+    }
+  ],
+  "scheduledActions": [
+    {
+      "scheduledActionName": "orchestrator-scale-up-business-hours",
+      "schedule": "cron(0 8 * * MON-FRI)",
+      "scalableTargetAction": {
+        "minCapacity": 3,
+        "maxCapacity": 10
+      }
+    },
+    {
+      "scheduledActionName": "orchestrator-scale-down-off-hours",
+      "schedule": "cron(0 20 * * MON-FRI)",
+      "scalableTargetAction": {
+        "minCapacity": 2,
+        "maxCapacity": 6
+      }
+    }
+  ]
+}

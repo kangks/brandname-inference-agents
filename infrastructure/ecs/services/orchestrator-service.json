@@ -1,0 +1,57 @@
+{
+  "serviceName": "multilingual-inference-orchestrator",
+  "cluster": "multilingual-inference-cluster",
+  "taskDefinition": "multilingual-inference-orchestrator",
+  "desiredCount": 2,
+  "launchType": "FARGATE",
+  "platformVersion": "LATEST",
+  "networkConfiguration": {
+    "awsvpcConfiguration": {
+      "subnets": [
+        "subnet-XXXXXXXXX",
+        "subnet-YYYYYYYYY"
+      ],
+      "securityGroups": [
+        "sg-XXXXXXXXX"
+      ],
+      "assignPublicIp": "ENABLED"
+    }
+  },
+  "loadBalancers": [
+    {
+      "targetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:ACCOUNT_ID:targetgroup/orchestrator-tg/XXXXXXXXX",
+      "containerName": "orchestrator-agent",
+      "containerPort": 8080
+    }
+  ],
+  "serviceRegistries": [
+    {
+      "registryArn": "arn:aws:servicediscovery:us-east-1:ACCOUNT_ID:service/srv-XXXXXXXXX",
+      "containerName": "orchestrator-agent",
+      "containerPort": 8080
+    }
+  ],
+  "deploymentConfiguration": {
+    "maximumPercent": 200,
+    "minimumHealthyPercent": 50,
+    "deploymentCircuitBreaker": {
+      "enable": true,
+      "rollback": true
+    }
+  },
+  "enableExecuteCommand": true,
+  "tags": [
+    {
+      "key": "Environment",
+      "value": "production"
+    },
+    {
+      "key": "Service",
+      "value": "orchestrator"
+    },
+    {
+      "key": "Platform",
+      "value": "ARM64"
+    }
+  ]
+}

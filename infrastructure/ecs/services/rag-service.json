@@ -1,0 +1,50 @@
+{
+  "serviceName": "multilingual-inference-rag",
+  "cluster": "multilingual-inference-cluster",
+  "taskDefinition": "multilingual-inference-rag",
+  "desiredCount": 1,
+  "launchType": "FARGATE",
+  "platformVersion": "LATEST",
+  "networkConfiguration": {
+    "awsvpcConfiguration": {
+      "subnets": [
+        "subnet-XXXXXXXXX",
+        "subnet-YYYYYYYYY"
+      ],
+      "securityGroups": [
+        "sg-XXXXXXXXX"
+      ],
+      "assignPublicIp": "ENABLED"
+    }
+  },
+  "serviceRegistries": [
+    {
+      "registryArn": "arn:aws:servicediscovery:us-east-1:ACCOUNT_ID:service/srv-ZZZZZZZZZ",
+      "containerName": "rag-agent",
+      "containerPort": 8082
+    }
+  ],
+  "deploymentConfiguration": {
+    "maximumPercent": 200,
+    "minimumHealthyPercent": 50,
+    "deploymentCircuitBreaker": {
+      "enable": true,
+      "rollback": true
+    }
+  },
+  "enableExecuteCommand": true,
+  "tags": [
+    {
+      "key": "Environment",
+      "value": "production"
+    },
+    {
+      "key": "Service",
+      "value": "rag"
+    },
+    {
+      "key": "Platform",
+      "value": "ARM64"
+    }
+  ]
+}

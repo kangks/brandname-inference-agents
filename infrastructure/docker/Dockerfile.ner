@@ -1,0 +1,47 @@
+# Dockerfile for NER Agent - ARM64 platform
+FROM --platform=linux/arm64 python:3.13-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies for ARM64 and spaCy models
+RUN apt-get update && apt-get install -y \
+    curl \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Download spaCy models for multilingual support
+RUN python -m spacy download en_core_web_sm
+RUN python -m spacy download xx_ent_wiki_sm
+
+# Copy application code
+COPY inference/ ./inference/
+COPY pyproject.toml .
+
+# Install the package in development mode
+RUN pip install -e .
+
+# Create non-root user for security
+RUN useradd --create-home --shell /bin/bash app
+RUN chown -R app:app /app
+USER app
+
+# Expose port for health checks and API
+EXPOSE 8081
+
+# Health check endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8081/health || exit 1
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV AWS_DEFAULT_REGION=us-east-1
+
+# Run NER agent
+CMD ["python", "-m", "inference.agents.ner_agent"]
