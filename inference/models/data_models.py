@@ -171,6 +171,7 @@ class InferenceResult:
     best_confidence: float
     best_method: str
     total_processing_time: float
+    agent_results: Optional[Dict[str, Dict[str, Any]]] = None
     
     def __post_init__(self) -> None:
         """Validate inference result data."""

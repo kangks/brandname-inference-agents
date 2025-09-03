@@ -337,20 +337,87 @@ class StrandsOrchestratorAgent(OrchestratorAgent, Agent):
         hybrid_result = None
         simple_result = None
         
+        # Track agent results with detailed predictions
+        agent_results = {}
+        
         for agent_name, agent_response in results.items():
             if isinstance(agent_response, dict) and agent_response.get("success"):
                 actual_result = agent_response.get("result")
+                
+                # Build detailed result for this agent
+                agent_detail = {
+                    "success": True,
+                    "prediction": None,
+                    "confidence": 0.0,
+                    "processing_time": 0.0,
+                    "error": None
+                }
+                
                 if agent_name == "ner":
                     ner_result = actual_result
+                    if ner_result and ner_result.entities:
+                        # Find best brand entity
+                        brand_entities = [e for e in ner_result.entities if e.entity_type.value == "BRAND"]
+                        if brand_entities:
+                            best_brand = max(brand_entities, key=lambda x: x.confidence)
+                            agent_detail["prediction"] = best_brand.text
+                            agent_detail["confidence"] = best_brand.confidence
+                        agent_detail["processing_time"] = ner_result.processing_time
+                        agent_detail["entities_count"] = len(ner_result.entities)
+                        
                 elif agent_name == "rag":
                     rag_result = actual_result
+                    if rag_result:
+                        agent_detail["prediction"] = rag_result.predicted_brand
+                        agent_detail["confidence"] = rag_result.confidence
+                        agent_detail["processing_time"] = rag_result.processing_time
+                        agent_detail["similar_products_count"] = len(rag_result.similar_products)
+                        
                 elif agent_name == "llm":
                     llm_result = actual_result
+                    if llm_result:
+                        agent_detail["prediction"] = llm_result.predicted_brand
+                        agent_detail["confidence"] = llm_result.confidence
+                        agent_detail["processing_time"] = llm_result.processing_time
+                        agent_detail["reasoning"] = llm_result.reasoning[:100] + "..." if len(llm_result.reasoning) > 100 else llm_result.reasoning
+                        
                 elif agent_name == "hybrid":
                     hybrid_result = actual_result
+                    if hybrid_result:
+                        agent_detail["prediction"] = hybrid_result.predicted_brand
+                        agent_detail["confidence"] = hybrid_result.confidence
+                        agent_detail["processing_time"] = hybrid_result.processing_time
+                        agent_detail["ner_contribution"] = hybrid_result.ner_contribution
+                        agent_detail["rag_contribution"] = hybrid_result.rag_contribution
+                        agent_detail["llm_contribution"] = hybrid_result.llm_contribution
+                        
                 elif agent_name == "simple":
-                    # Simple agent returns LLMResult-like structure, treat as LLM result
+                    # Simple agent returns LLMResult-like structure
                     simple_result = actual_result
+                    if simple_result:
+                        agent_detail["prediction"] = simple_result.predicted_brand
+                        agent_detail["confidence"] = simple_result.confidence
+                        agent_detail["processing_time"] = simple_result.processing_time
+                        if hasattr(simple_result, 'reasoning'):
+                            agent_detail["reasoning"] = simple_result.reasoning[:100] + "..." if len(simple_result.reasoning) > 100 else simple_result.reasoning
+                
+                agent_results[agent_name] = agent_detail
+                
+            else:
+                # Agent failed or returned None
+                error_msg = "Unknown error"
+                if isinstance(agent_response, dict):
+                    error_msg = agent_response.get("error", "Agent returned no result")
+                elif agent_response is None:
+                    error_msg = "Agent returned None"
+                
+                agent_results[agent_name] = {
+                    "success": False,
+                    "prediction": None,
+                    "confidence": 0.0,
+                    "processing_time": 0.0,
+                    "error": error_msg
+                }
         
         # Determine best prediction based on confidence scores
         best_prediction, best_confidence, best_method = self._select_best_prediction(
@@ -366,7 +433,8 @@ class StrandsOrchestratorAgent(OrchestratorAgent, Agent):
             best_prediction=best_prediction,
             best_confidence=best_confidence,
             best_method=best_method,
-            total_processing_time=total_time
+            total_processing_time=total_time,
+            agent_results=agent_results
         )
     
     def _select_best_prediction(
@@ -596,6 +664,23 @@ class StrandsOrchestratorAgent(OrchestratorAgent, Agent):
         """
         result = await self.orchestrate_inference(input_data)
         
+        # Extract entities from NER result if available
+        entities = []
+        if result.ner_result and result.ner_result.entities:
+            entities = [
+                {
+                    "text": entity.text,
+                    "label": entity.entity_type.value,
+                    "confidence": entity.confidence,
+                    "start": entity.start_pos,
+                    "end": entity.end_pos
+                }
+                for entity in result.ner_result.entities
+            ]
+        
+        # Use agent results from the InferenceResult, or build default if not available
+        agent_results = result.agent_results or {}
+        
         # Convert InferenceResult to dictionary format expected by server
         return {
             "product_name": input_data.product_name,
@@ -607,11 +692,11 @@ class StrandsOrchestratorAgent(OrchestratorAgent, Agent):
                     "method": result.best_method
                 }
             ],
-            "entities": getattr(result, 'entities', []),
+            "entities": entities,
             "processing_time_ms": int(result.total_processing_time * 1000),
             "agent_used": "orchestrator",
             "orchestrator_agents": list(self.agents.keys()),
-            "agent_results": getattr(result, 'agent_results', {}),
+            "agent_results": agent_results,
             "timestamp": time.time()
         }
     
