@@ -80,10 +80,35 @@ class SpacyNERAgent(NERAgent):
             try:
                 self.nlp = spacy.load(self.model_name)
                 self.logger.info(f"Loaded spaCy model: {self.model_name}")
-            except OSError:
-                self.logger.warning(f"Model {self.model_name} not found, downloading...")
-                await self._download_model()
-                self.nlp = spacy.load(self.model_name)
+            except OSError as e:
+                self.logger.warning(f"Model {self.model_name} not found: {str(e)}")
+                # Try fallback models
+                fallback_models = ["en_core_web_sm", "en_core_web_md", "xx_ent_wiki_sm"]
+                model_loaded = False
+                
+                for fallback_model in fallback_models:
+                    if fallback_model != self.model_name:
+                        try:
+                            self.nlp = spacy.load(fallback_model)
+                            self.model_name = fallback_model
+                            self.logger.info(f"Loaded fallback spaCy model: {fallback_model}")
+                            model_loaded = True
+                            break
+                        except OSError:
+                            continue
+                
+                if not model_loaded:
+                    # Try to download the original model
+                    try:
+                        self.logger.info(f"Attempting to download model: {self.model_name}")
+                        await self._download_model()
+                        self.nlp = spacy.load(self.model_name)
+                        self.logger.info(f"Downloaded and loaded spaCy model: {self.model_name}")
+                    except Exception as download_error:
+                        raise AgentInitializationError(
+                            self.agent_name,
+                            f"Failed to load or download spaCy model {self.model_name}: {str(download_error)}"
+                        )
             
             # Verify model has NER component
             if "ner" not in self.nlp.pipe_names:
@@ -93,7 +118,7 @@ class SpacyNERAgent(NERAgent):
                 )
             
             self.set_initialized(True)
-            self.logger.info("spaCy NER agent initialized successfully")
+            self.logger.info(f"spaCy NER agent initialized successfully with model: {self.model_name}")
             
         except Exception as e:
             self.set_initialized(False)

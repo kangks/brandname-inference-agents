@@ -45,7 +45,7 @@ class AgentRegistry:
         
         # NER Agent Configuration
         self.agent_configs["ner"] = {
-            "model_name": "xx_ent_wiki_sm",
+            "model_name": "en_core_web_sm",  # Use reliable English model
             "confidence_threshold": 0.5,
             "max_text_length": 1000,
             "use_transformer_fallback": False,
@@ -149,35 +149,39 @@ class AgentRegistry:
         try:
             logger.info("Registering NER agent...")
             
-            # Try to create multilingual NER agent first
+            # Try to create basic spaCy NER agent first (more reliable)
             try:
-                ner_agent = MultilingualNERAgent(self.agent_configs["ner"])
-                await ner_agent.initialize()
-                self.registered_agents["ner"] = ner_agent
-                logger.info("Multilingual NER agent registered successfully")
-                return
-            except Exception as e:
-                logger.warning(f"Failed to initialize multilingual NER agent: {str(e)}")
-            
-            # Fallback to basic spaCy NER agent
-            try:
+                logger.info("Attempting to initialize SpacyNERAgent...")
                 ner_agent = SpacyNERAgent(self.agent_configs["ner"])
                 await ner_agent.initialize()
                 self.registered_agents["ner"] = ner_agent
-                logger.info("Basic spaCy NER agent registered successfully")
+                logger.info("✅ SpaCy NER agent registered successfully")
                 return
             except Exception as e:
-                logger.warning(f"Failed to initialize basic spaCy NER agent: {str(e)}")
+                logger.warning(f"❌ Failed to initialize SpaCy NER agent: {str(e)}")
+                logger.warning(f"   Error type: {type(e).__name__}")
+            
+            # Try multilingual NER agent as fallback
+            try:
+                logger.info("Attempting to initialize MultilingualNERAgent...")
+                ner_agent = MultilingualNERAgent(self.agent_configs["ner"])
+                await ner_agent.initialize()
+                self.registered_agents["ner"] = ner_agent
+                logger.info("✅ Multilingual NER agent registered successfully")
+                return
+            except Exception as e:
+                logger.warning(f"❌ Failed to initialize multilingual NER agent: {str(e)}")
+                logger.warning(f"   Error type: {type(e).__name__}")
             
             # If spaCy is not available, create a mock NER agent
-            logger.info("Creating mock NER agent as fallback...")
+            logger.warning("⚠️  All real NER agents failed, falling back to mock NER agent")
             mock_ner_agent = MockNERAgent(self.agent_configs["ner"])
             await mock_ner_agent.initialize()
             self.registered_agents["ner"] = mock_ner_agent
-            logger.info("Mock NER agent registered successfully")
+            logger.info("✅ Mock NER agent registered successfully")
             
         except Exception as e:
-            logger.warning(f"Failed to register any NER agent: {str(e)}")
+            logger.error(f"❌ Failed to register any NER agent: {str(e)}")
             # Don't raise exception - system can work without NER
     
     async def _register_rag_agent(self) -> None:

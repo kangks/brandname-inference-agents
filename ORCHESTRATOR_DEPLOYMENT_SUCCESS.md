@@ -38,14 +38,14 @@
 ```
 
 #### Inference Testing
-| Product Name | Expected Brand | Result | Status |
-|--------------|----------------|---------|---------|
-| iPhone 15 Pro Max from Apple | apple | ✅ Detected | SUCCESS |
-| Samsung Galaxy S24 Ultra smartphone | samsung | ✅ Detected | SUCCESS |
-| Nike Air Jordan sneakers | nike | ✅ Detected | SUCCESS |
-| Sony PlayStation 5 console | sony | ✅ Detected | SUCCESS |
-| Microsoft Surface Pro laptop | microsoft | ❌ Not detected | PARTIAL |
-| Google Pixel 8 phone | google | ❌ Not detected | PARTIAL |
+| Product Name                        | Expected Brand | Result         | Status  |
+| ----------------------------------- | -------------- | -------------- | ------- |
+| iPhone 15 Pro Max from Apple        | apple          | ✅ Detected     | SUCCESS |
+| Samsung Galaxy S24 Ultra smartphone | samsung        | ✅ Detected     | SUCCESS |
+| Nike Air Jordan sneakers            | nike           | ✅ Detected     | SUCCESS |
+| Sony PlayStation 5 console          | sony           | ✅ Detected     | SUCCESS |
+| Microsoft Surface Pro laptop        | microsoft      | ❌ Not detected | PARTIAL |
+| Google Pixel 8 phone                | google         | ❌ Not detected | PARTIAL |
 
 **Overall Success Rate**: 4/6 (67%) - Core functionality working
 
