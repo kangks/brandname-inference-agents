@@ -27,7 +27,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${Environment}-alb'
+      Name: !Sub '${Environment}-inference-alb'
       Scheme: internet-facing
       Type: application
       IpAddressType: ipv4
@@ -46,7 +46,7 @@ Resources:
   OrchestratorTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${Environment}-orchestrator-tg'
+      Name: !Sub '${Environment}-inference-orchestrator-tg'
       Port: 8080
       Protocol: HTTP
       VpcId: !Ref VpcId
@@ -71,7 +71,7 @@ Resources:
   NERTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${Environment}-ner-tg'
+      Name: !Sub '${Environment}-inference-ner-tg'
       Port: 8081
       Protocol: HTTP
       VpcId: !Ref VpcId
@@ -96,7 +96,7 @@ Resources:
   RAGTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${Environment}-rag-tg'
+      Name: !Sub '${Environment}-inference-rag-tg'
       Port: 8082
       Protocol: HTTP
       VpcId: !Ref VpcId
@@ -121,7 +121,7 @@ Resources:
   LLMTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${Environment}-llm-tg'
+      Name: !Sub '${Environment}-inference-llm-tg'
       Port: 8083
       Protocol: HTTP
       VpcId: !Ref VpcId
@@ -146,7 +146,7 @@ Resources:
   HybridTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${Environment}-hybrid-tg'
+      Name: !Sub '${Environment}-inference-hybrid-tg'
       Port: 8084
       Protocol: HTTP
       VpcId: !Ref VpcId

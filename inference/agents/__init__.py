@@ -20,7 +20,7 @@ from .ner_agent import SpacyNERAgent, MultilingualNERAgent
 from .rag_agent import SentenceTransformerRAGAgent, EnhancedRAGAgent
 from .llm_agent import BedrockLLMAgent, EnhancedBedrockLLMAgent
 from .hybrid_agent import SequentialHybridAgent, OptimizedHybridAgent
-from .orchestrator_agent import StrandsOrchestratorAgent, create_orchestrator_agent
+from .orchestrator_agent import StrandsMultiAgentOrchestrator, StrandsOrchestratorAgent, create_multiagent_orchestrator_example
 
 __all__ = [
     "BaseAgent",
@@ -40,6 +40,7 @@ __all__ = [
     "EnhancedBedrockLLMAgent",
     "SequentialHybridAgent",
     "OptimizedHybridAgent",
+    "StrandsMultiAgentOrchestrator",
     "StrandsOrchestratorAgent",
-    "create_orchestrator_agent"
+    "create_multiagent_orchestrator_example"
 ]

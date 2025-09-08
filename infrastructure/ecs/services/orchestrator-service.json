@@ -24,13 +24,7 @@
       "containerPort": 8080
     }
   ],
-  "serviceRegistries": [
-    {
-      "registryArn": "arn:aws:servicediscovery:us-east-1:ACCOUNT_ID:service/srv-XXXXXXXXX",
-      "containerName": "orchestrator-agent",
-      "containerPort": 8080
-    }
-  ],
+
   "deploymentConfiguration": {
     "maximumPercent": 200,
     "minimumHealthyPercent": 50,

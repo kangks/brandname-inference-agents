@@ -17,13 +17,7 @@
       "assignPublicIp": "ENABLED"
     }
   },
-  "serviceRegistries": [
-    {
-      "registryArn": "arn:aws:servicediscovery:us-east-1:ACCOUNT_ID:service/srv-YYYYYYYYY",
-      "containerName": "ner-agent",
-      "containerPort": 8081
-    }
-  ],
+
   "deploymentConfiguration": {
     "maximumPercent": 200,
     "minimumHealthyPercent": 50,

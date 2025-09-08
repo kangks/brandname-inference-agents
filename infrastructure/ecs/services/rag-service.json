@@ -17,13 +17,7 @@
       "assignPublicIp": "ENABLED"
     }
   },
-  "serviceRegistries": [
-    {
-      "registryArn": "arn:aws:servicediscovery:us-east-1:ACCOUNT_ID:service/srv-ZZZZZZZZZ",
-      "containerName": "rag-agent",
-      "containerPort": 8082
-    }
-  ],
+
   "deploymentConfiguration": {
     "maximumPercent": 200,
     "minimumHealthyPercent": 50,

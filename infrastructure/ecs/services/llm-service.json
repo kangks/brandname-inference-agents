@@ -17,13 +17,7 @@
       "assignPublicIp": "ENABLED"
     }
   },
-  "serviceRegistries": [
-    {
-      "registryArn": "arn:aws:servicediscovery:us-east-1:ACCOUNT_ID:service/srv-AAAAAAAAA",
-      "containerName": "llm-agent",
-      "containerPort": 8083
-    }
-  ],
+
   "deploymentConfiguration": {
     "maximumPercent": 200,
     "minimumHealthyPercent": 50,

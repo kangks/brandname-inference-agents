@@ -181,59 +181,8 @@ Resources:
         - Key: Purpose
           Value: training-data-storage
 
-  # S3 Bucket Policy for ECS tasks
-  ModelArtifactsBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref ModelArtifactsBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AllowECSTaskAccess
-            Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AWS::StackName}-ecs-task-role'
-            Action:
-              - s3:GetObject
-              - s3:PutObject
-              - s3:DeleteObject
-              - s3:ListBucket
-            Resource:
-              - !Sub '${ModelArtifactsBucket}/*'
-              - !Ref ModelArtifactsBucket
-
-  TrainingDataBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref TrainingDataBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AllowECSTaskAccess
-            Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AWS::StackName}-ecs-task-role'
-            Action:
-              - s3:GetObject
-              - s3:PutObject
-              - s3:DeleteObject
-              - s3:ListBucket
-            Resource:
-              - !Sub '${TrainingDataBucket}/*'
-              - !Ref TrainingDataBucket
-          - Sid: AllowBedrockAccess
-            Effect: Allow
-            Principal:
-              Service: bedrock.amazonaws.com
-            Action:
-              - s3:GetObject
-              - s3:ListBucket
-            Resource:
-              - !Sub '${TrainingDataBucket}/*'
-              - !Ref TrainingDataBucket
-            Condition:
-              StringEquals:
-                'aws:SourceAccount': !Ref AWS::AccountId
+  # Note: S3 Bucket Policies will be added after ECS stack creates the task role
+  # This prevents circular dependency issues during initial deployment
 
 Outputs:
   EFSFileSystemId:

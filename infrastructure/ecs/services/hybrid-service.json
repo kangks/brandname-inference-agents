@@ -17,13 +17,7 @@
       "assignPublicIp": "ENABLED"
     }
   },
-  "serviceRegistries": [
-    {
-      "registryArn": "arn:aws:servicediscovery:us-east-1:ACCOUNT_ID:service/srv-BBBBBBBBB",
-      "containerName": "hybrid-agent",
-      "containerPort": 8084
-    }
-  ],
+
   "deploymentConfiguration": {
     "maximumPercent": 200,
     "minimumHealthyPercent": 50,

@@ -152,7 +152,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${Environment}-alb'
+      Name: !Sub '${Environment}-inf-alb'
       Scheme: internet-facing
       Type: application
       IpAddressType: ipv4
@@ -163,7 +163,7 @@ Resources:
         - !Ref ALBSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-alb'
+          Value: !Sub '${Environment}-inf-alb'
         - Key: Environment
           Value: !Ref Environment
 
@@ -171,7 +171,7 @@ Resources:
   OrchestratorTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${Environment}-orchestrator-tg'
+      Name: !Sub '${Environment}-inf-orchestrator-tg'
       Port: 8080
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -187,7 +187,7 @@ Resources:
         HttpCode: '200'
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-orchestrator-tg'
+          Value: !Sub '${Environment}-inf-orchestrator-tg'
         - Key: Environment
           Value: !Ref Environment
 
