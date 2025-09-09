@@ -24,7 +24,7 @@ The Multilingual Product Inference System is a sophisticated AI-powered solution
 
 ### Architecture Diagram
 
-![Inference Architecture](./generated-diagrams/inference_architecture_diagram.png)
+![Inference Architecture](../diagrams/inference_architecture_diagram.png)
 
 **Component Flow Annotations:**
 - ❶ **API Requests**: Users send product inference requests via REST API
