@@ -18,6 +18,7 @@ from urllib.parse import urlparse, parse_qs
 from .config.settings import get_config, setup_logging
 from .models.data_models import ProductInput, LanguageHint
 from .agents.orchestrator_agent import create_orchestrator_agent
+from .agents.registry import get_agent_registry, initialize_default_agents
 
 
 logger = logging.getLogger(__name__)
@@ -26,8 +27,9 @@ logger = logging.getLogger(__name__)
 class InferenceHandler(BaseHTTPRequestHandler):
     """HTTP request handler for inference endpoints."""
     
-    def __init__(self, *args, orchestrator=None, **kwargs):
+    def __init__(self, *args, orchestrator=None, individual_agents=None, **kwargs):
         self.orchestrator = orchestrator
+        self.individual_agents = individual_agents or {}
         super().__init__(*args, **kwargs)
     
     def do_GET(self):
@@ -76,10 +78,15 @@ class InferenceHandler(BaseHTTPRequestHandler):
             # Check if orchestrator is available
             if hasattr(self, 'orchestrator') and self.orchestrator:
                 health_status["orchestrator"] = "available"
-                health_status["agents_count"] = len(getattr(self.orchestrator, 'agents', []))
+                health_status["orchestrator_agents_count"] = len(getattr(self.orchestrator, 'agents', []))
             else:
                 health_status["orchestrator"] = "not_initialized"
-                health_status["agents_count"] = 0
+                health_status["orchestrator_agents_count"] = 0
+            
+            # Check individual agents
+            health_status["individual_agents_count"] = len(getattr(self, 'individual_agents', {}))
+            health_status["available_methods"] = list(getattr(self, 'individual_agents', {}).keys())
+            health_status["agents_count"] = health_status["individual_agents_count"]  # For backward compatibility
             
 
             
@@ -268,18 +275,9 @@ class InferenceHandler(BaseHTTPRequestHandler):
         """Handle inference using a specific agent method."""
         logger.info(f"Using specific agent method: {method}")
         
-        if not (hasattr(self, 'orchestrator') and self.orchestrator and 
-                hasattr(self.orchestrator, 'agents')):
-            return {
-                "status": "error",
-                "error": "Orchestrator not available for agent access",
-                "method": method,
-                "timestamp": time.time()
-            }
-        
-        # Check if the requested agent is available
-        if method not in self.orchestrator.agents:
-            available_agents = list(self.orchestrator.agents.keys())
+        # Check if the requested agent is available in individual agents
+        if method not in self.individual_agents:
+            available_agents = list(self.individual_agents.keys())
             return {
                 "status": "error",
                 "error": f"Agent '{method}' not available. Available agents: {available_agents}",
@@ -289,8 +287,8 @@ class InferenceHandler(BaseHTTPRequestHandler):
             }
         
         try:
-            # Get the specific agent
-            agent = self.orchestrator.agents[method]
+            # Get the specific agent from individual agents
+            agent = self.individual_agents[method]
             
             # Run agent inference in thread
             import concurrent.futures
@@ -444,15 +442,15 @@ class InferenceHandler(BaseHTTPRequestHandler):
         logger.info(f"{self.address_string()} - {format % args}")
 
 
-def create_handler_class(orchestrator=None):
-    """Create handler class with orchestrator instance."""
+def create_handler_class(orchestrator=None, individual_agents=None):
+    """Create handler class with orchestrator and individual agents."""
     class Handler(InferenceHandler):
         def __init__(self, *args, **kwargs):
-            super().__init__(*args, orchestrator=orchestrator, **kwargs)
+            super().__init__(*args, orchestrator=orchestrator, individual_agents=individual_agents, **kwargs)
     return Handler
 
 
-async def initialize_server() -> Optional[Any]:
+async def initialize_server() -> Tuple[Optional[Any], Optional[Dict[str, Any]]]:
     """Initialize the inference server."""
     try:
         # Load configuration and setup logging
@@ -463,17 +461,25 @@ async def initialize_server() -> Optional[Any]:
         logger.info(f"Environment: {config.environment.value}")
         logger.info(f"AWS Region: {config.aws.region}")
         
+        # Initialize agent registry for individual agents
+        individual_agents = None
+        try:
+            individual_agents = await initialize_default_agents()
+            logger.info(f"Individual agents initialized: {list(individual_agents.keys())}")
+        except Exception as e:
+            logger.warning(f"Could not initialize individual agents: {str(e)}")
+        
         # Create and initialize orchestrator with default agents
         orchestrator = None
         try:
             orchestrator = create_orchestrator_agent()
             await orchestrator.initialize()
-            logger.info(f"Orchestrator agent initialized with {len(orchestrator.agents)} agents")
+            logger.info(f"Orchestrator agent initialized with {len(orchestrator.agents)} specialized agents")
         except Exception as e:
             logger.warning(f"Could not initialize orchestrator agent: {str(e)}")
-            logger.info("Server will run without inference capability")
+            logger.info("Server will run without orchestrator capability")
         
-        return orchestrator
+        return orchestrator, individual_agents
         
     except Exception as e:
         logger.error(f"Server initialization failed: {str(e)}")
@@ -487,10 +493,10 @@ def run_server(host: str = "0.0.0.0", port: int = 8080):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
-        orchestrator = loop.run_until_complete(initialize_server())
+        orchestrator, individual_agents = loop.run_until_complete(initialize_server())
         
-        # Create handler class with orchestrator
-        handler_class = create_handler_class(orchestrator)
+        # Create handler class with orchestrator and individual agents
+        handler_class = create_handler_class(orchestrator, individual_agents)
         
         # Create and start server
         server = HTTPServer((host, port), handler_class)
