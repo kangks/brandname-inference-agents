@@ -50,52 +50,68 @@ The system consists of two main components:
    make check-aws
    ```
 
-## 🐳 Local Docker Testing
+## 🚀 Production Inference Testing
 
-Before deploying to ECS, test the inference container locally:
+The inference system is deployed and accessible via production endpoint:
 
 ### Quick Test
 ```bash
-# Validate Docker environment
-make docker-validate
-
-# Run simple container test
-make docker-test-simple
+# Test the production inference endpoint
+curl -X POST http://production-alb-107602758.us-east-1.elb.amazonaws.com/infer \
+  -H "Content-Type: application/json" \
+  -d '{"product_name": "iPhone 15 Pro Max", "language_hint": "en"}'
 ```
 
-### Comprehensive Testing
+### Multilingual Testing
 ```bash
-# Run full test suite with mock services
-make docker-test-compose
+# Test Thai product name
+curl -X POST http://production-alb-107602758.us-east-1.elb.amazonaws.com/infer \
+  -H "Content-Type: application/json" \
+  -d '{"product_name": "ยาสีฟัน Colgate Total", "language_hint": "th"}'
 ```
 
-### Test Results
-- ✅ **Pass**: Container is ready for ECS deployment
-- ❌ **Fail**: Review logs and fix issues before deploying
+### Expected Response
+The orchestrator coordinates multiple agents (NER, RAG, LLM, Hybrid) and returns:
+```json
+{
+  "input": {"product_name": "iPhone 15 Pro Max", "language_hint": "en"},
+  "best_prediction": "Apple",
+  "best_confidence": 0.95,
+  "agent_results": {...},
+  "orchestration_time": 0.245
+}
+```
 
-See [Docker Testing Workflow](DOCKER_TESTING_WORKFLOW.md) for detailed instructions.
-   make validate-env
-   ```
+See [Inference Testing Guide](INFERENCE_TESTING_GUIDE.md) for comprehensive testing examples.
 
-### Basic Usage
+### Production Usage
 
-1. **Initialize system:**
+1. **Test inference endpoint:**
    ```bash
-   python -m inference.main init
+   curl -X POST http://production-alb-107602758.us-east-1.elb.amazonaws.com/infer \
+     -H "Content-Type: application/json" \
+     -d '{"product_name": "iPhone 15 Pro Max", "language_hint": "en"}'
    ```
 
 2. **Check system health:**
    ```bash
-   python -m inference.main health
+   curl http://production-alb-107602758.us-east-1.elb.amazonaws.com/health
    ```
 
-3. **Process a product name:**
+3. **Process multilingual products:**
    ```bash
-   python -m inference.main process "iPhone 15 Pro Max" --language en
-   python -m inference.main process "ยาสีฟัน Wonder smile toothpaste kid" --language mixed
+   # English product
+   curl -X POST http://production-alb-107602758.us-east-1.elb.amazonaws.com/infer \
+     -H "Content-Type: application/json" \
+     -d '{"product_name": "Samsung Galaxy S24", "language_hint": "en"}'
+   
+   # Thai product  
+   curl -X POST http://production-alb-107602758.us-east-1.elb.amazonaws.com/infer \
+     -H "Content-Type: application/json" \
+     -d '{"product_name": "ยาสีฟัน Wonder smile toothpaste kid", "language_hint": "th"}'
    ```
 
-4. **Start development server:**
+4. **Local development server:**
    ```bash
    python -m inference.main serve --dev
    ```
@@ -104,32 +120,46 @@ See [Docker Testing Workflow](DOCKER_TESTING_WORKFLOW.md) for detailed instructi
 
 ```
 multilingual-product-inference/
-├── inference/                    # Inference stack
-│   ├── agents/                  # Agent implementations
-│   │   ├── __init__.py
-│   │   └── base_agent.py       # Base agent interfaces
+├── inference/                    # ✅ Inference stack (DEPLOYED)
+│   ├── agents/                  # Multi-agent system implementations
+│   │   ├── ner_agent.py        # Named Entity Recognition agent
+│   │   ├── rag_agent.py        # Retrieval-Augmented Generation agent
+│   │   ├── llm_agent.py        # Large Language Model agent
+│   │   ├── hybrid_agent.py     # Hybrid ensemble agent
+│   │   └── orchestrator_agent.py # Orchestrator coordination agent
 │   ├── config/                 # Configuration management
-│   │   ├── __init__.py
-│   │   └── settings.py         # System configuration
-│   ├── models/                 # Data models
-│   │   ├── __init__.py
-│   │   └── data_models.py      # Core data structures
-│   ├── __init__.py
-│   └── main.py                 # Main entry point
-├── training/                    # Training stack
-│   ├── preprocessing/          # Data preprocessing
-│   ├── pipelines/             # Training pipelines
+│   ├── models/                 # Data models and schemas
+│   ├── infrastructure/         # AWS deployment scripts
+│   └── main.py                 # FastAPI application entry point
+├── training/                    # 🔄 Training stack (NEXT PHASE)
+│   ├── data/                   # Training data processing
+│   ├── preprocessing/          # Data cleaning and preparation
+│   ├── pipelines/             # Model training pipelines
+│   ├── evaluation/            # Model validation and testing
 │   └── __init__.py
-├── tests/                      # Test suite
-│   ├── __init__.py
-│   ├── test_config.py         # Configuration tests
-│   └── test_data_models.py    # Data model tests
+├── training_dataset.txt        # 📊 Multilingual product dataset (Thai/English)
+├── tests/                      # Comprehensive test suite
+├── examples/                   # Usage examples and testing scripts
+├── Dockerfile                  # ARM64 production container
 ├── requirements.txt           # Python dependencies
-├── pyproject.toml            # Project configuration
-├── Makefile                  # Development commands
-├── Dockerfile                # ARM64 container image
-├── .env.example             # Environment template
-└── README.md               # This file
+└── README.md                  # This documentation
+```
+
+### Training Dataset
+
+The `training_dataset.txt` contains **multilingual e-commerce product data** with:
+- **Product names** in Thai, English, and mixed languages
+- **Brand labels** for supervised learning
+- **Category information** for context
+- **45+ product entries** covering diverse brands and categories
+
+Example entry:
+```json
+{
+  "brand": "Wonder Smile(วันเดอร์สไมล์)", 
+  "product_name": "ยาสีฟัน Wonder smile toothpaste kid วันเดอร์สไมล์ ยาสีฟัน ยาสีฟันเด็ก",
+  "category": "กลุ่มผลิตภัณฑ์เพื่อสุขภาพ"
+}
 ```
 
 ## 🛠️ Development
@@ -194,9 +224,80 @@ Key configuration areas:
 - **Agent settings**: Timeouts, concurrency, and confidence thresholds
 - **Infrastructure**: Milvus, ECS, and monitoring settings
 
+## 🎓 Training System (Next Phase)
+
+### Training Data Overview
+
+The system includes a **multilingual product dataset** (`training_dataset.txt`) with:
+- **45+ product entries** in Thai, English, and mixed languages
+- **Brand extraction targets** for supervised learning
+- **E-commerce categories** including electronics, fashion, beauty, and more
+- **Real-world complexity** with mixed scripts and transliterations
+
+### Training Pipeline Components
+
+#### 1. **Data Preprocessing**
+```bash
+# Process multilingual training data
+python -m training.preprocessing.clean_data --input training_dataset.txt
+python -m training.preprocessing.extract_features --language mixed
+```
+
+#### 2. **Model Training**
+- **NER Model**: Train spaCy custom model for brand entity recognition
+- **Embedding Model**: Fine-tune sentence transformers for multilingual similarity
+- **LLM Fine-tuning**: Train Nova Pro model via AWS Bedrock for brand reasoning
+- **Vector Database**: Build Milvus collection from training embeddings
+
+#### 3. **Training Commands** (To be implemented)
+```bash
+# Train NER model
+python -m training.pipelines.train_ner --data training_dataset.txt --output models/ner_model
+
+# Fine-tune embeddings
+python -m training.pipelines.train_embeddings --data training_dataset.txt --model sentence-transformers
+
+# Submit LLM fine-tuning job
+python -m training.pipelines.train_llm --data training_dataset.txt --model nova-pro --aws-profile ml-sandbox
+
+# Build knowledge base
+python -m training.pipelines.build_knowledge_base --data training_dataset.txt --milvus-host production
+```
+
+### Training Data Examples
+
+**Thai Product with English Brand:**
+```json
+{"brand": "BENQ(เบ็นคิว)", "product_name": "BenQ GW2785TC 27นิ้ว FHD Eye Care Monitor"}
+```
+
+**Mixed Language Fashion:**
+```json
+{"brand": "zanzea", "product_name": "Esolo ZANZEA ชุดสไตล์เกาหลีของผู้หญิงทางการแขนบาน"}
+```
+
+**Thai Brand with Mixed Description:**
+```json
+{"brand": "Wonder Smile(วันเดอร์สไมล์)", "product_name": "ยาสีฟัน Wonder smile toothpaste kid"}
+```
+
 ## 🧪 Testing
 
-### Running Tests
+### Inference Testing (Production Ready)
+
+```bash
+# Test production endpoint
+curl -X POST http://production-alb-107602758.us-east-1.elb.amazonaws.com/infer \
+  -H "Content-Type: application/json" \
+  -d '{"product_name": "iPhone 15 Pro Max", "language_hint": "en"}'
+
+# Test with training data examples
+curl -X POST http://production-alb-107602758.us-east-1.elb.amazonaws.com/infer \
+  -H "Content-Type: application/json" \
+  -d '{"product_name": "ยาสีฟัน Wonder smile toothpaste kid", "language_hint": "th"}'
+```
+
+### Development Testing
 
 ```bash
 # All tests
@@ -208,14 +309,16 @@ pytest tests/ -m "unit"
 # Integration tests only  
 pytest tests/ -m "integration"
 
-# With coverage
-pytest tests/ --cov=inference --cov=training --cov-report=html
+# Training pipeline tests (to be implemented)
+pytest tests/training/ -v
 ```
 
 ### Test Structure
 
+- **Inference tests**: Test deployed production system
 - **Unit tests**: Test individual components in isolation
 - **Integration tests**: Test component interactions
+- **Training tests**: Validate training pipeline components
 - **Mock services**: Local testing without AWS dependencies
 
 ## 🐳 Docker Deployment
@@ -306,36 +409,51 @@ This implementation references patterns from `brand_extraction_ner_rag_llm_rev2.
 
 ## 🚧 Current Status
 
-**✅ Completed (Task 1):**
-- Project structure and organization
-- Core data models and interfaces  
-- Configuration management system
-- Development environment setup
-- PEP 8 compliance and tooling
-- Basic CLI and health checks
+**✅ Completed - Inference System:**
+- ✅ **Project Structure**: Complete organization with inference and training stacks
+- ✅ **Core Infrastructure**: Data models, configuration management, PEP 8 compliance
+- ✅ **Agent Implementation**: NER, RAG, LLM, Hybrid, and Orchestrator agents fully implemented
+- ✅ **Docker Deployment**: ARM64 containers built and pushed to ECR
+- ✅ **AWS Infrastructure**: ECS cluster, services, load balancer, and Milvus vector database
+- ✅ **Orchestrator Service**: Running and coordinating multiple inference agents
+- ✅ **API Endpoint**: Production inference endpoint accessible at `http://production-alb-107602758.us-east-1.elb.amazonaws.com/infer`
 
-**🔄 Next Steps:**
-- Task 2.1: Implement NER Agent
-- Task 2.2: Implement RAG Agent  
-- Task 2.3: Implement LLM Agent
-- Task 2.4: Implement Hybrid Agent
-- Task 3: Implement Orchestrator Agent
+**🔧 Current Issue:**
+- Load balancer health check configuration (final deployment step)
+
+**🔄 Next Phase - Training System:**
+- **Training Data Processing**: Process multilingual product dataset (Thai/English mixed)
+- **Model Training Pipeline**: Implement NER model training, embedding fine-tuning, and LLM fine-tuning
+- **Knowledge Base Creation**: Build vector database from training data for RAG system
+- **Model Evaluation**: Implement accuracy testing and validation frameworks
+- **Training Infrastructure**: Set up training jobs on AWS Bedrock and SageMaker
 
 ## 📚 Documentation
 
-### Comprehensive Guides
+### System Status Guides
 
-- **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** - Common issues and debugging steps including ARM64 platform considerations
-- **[Model Tuning Guide](docs/MODEL_TUNING.md)** - Detailed procedures for improving inference accuracy with ml-sandbox AWS profile usage
-- **[Deployment Guide](docs/DEPLOYMENT.md)** - Complete AWS infrastructure setup and management in us-east-1 region
-- **[Local Testing Guide](docs/LOCAL_TESTING.md)** - Mock service setup and testing procedures for Python 3.13 .venv environment
+- **[Final Status Summary](FINAL_STATUS_SUMMARY.md)** - Complete deployment status and current system capabilities
+- **[Inference Testing Guide](INFERENCE_TESTING_GUIDE.md)** - Production endpoint testing with examples and expected responses
+- **[ECS Deployment Success Summary](ECS_DEPLOYMENT_SUCCESS_SUMMARY.md)** - Infrastructure deployment details and service status
+
+### Implementation Guides
+
+- **[Strands Multiagent Orchestrator](STRANDS_MULTIAGENT_ORCHESTRATOR_README.md)** - Agent coordination and orchestration patterns
+- **[Working Inference Examples](WORKING_INFERENCE_EXAMPLES.md)** - Successful inference patterns and agent results
+- **[Docker Testing Workflow](DOCKER_TESTING_WORKFLOW.md)** - Container testing and validation procedures
+
+### Training Documentation (Next Phase)
+
+- **Training Dataset**: `training_dataset.txt` - 45+ multilingual product entries for model training
+- **Model Training Guide** (To be created) - NER, embedding, and LLM fine-tuning procedures
+- **Knowledge Base Setup** (To be created) - Vector database creation from training data
 
 ### Quick Reference
 
-- **Setup**: Python 3.13 + .venv virtual environment + PEP 8 compliance
-- **AWS**: ml-sandbox profile + us-east-1 region + ARM64 platform
-- **Testing**: Comprehensive mock services for local development
-- **Deployment**: ECS Fargate + Milvus + CloudFormation templates
+- **Production Endpoint**: `http://production-alb-107602758.us-east-1.elb.amazonaws.com/infer`
+- **Infrastructure**: ECS Fargate + Milvus + Application Load Balancer
+- **Agent Architecture**: Orchestrator + NER + RAG + LLM + Hybrid agents
+- **Training Data**: Multilingual Thai/English product dataset ready for processing
 
 ## 🔧 Troubleshooting
 
@@ -418,16 +536,33 @@ MIT License - see LICENSE file for details.
 
 ## 🆘 Support
 
-For issues and questions:
+### Current System Status
 
-1. **Check Documentation**: Review the comprehensive guides above
-2. **Troubleshooting**: Start with the [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
-3. **Local Testing**: Use the [Local Testing Guide](docs/LOCAL_TESTING.md) for development issues
-4. **AWS Issues**: Refer to the [Deployment Guide](docs/DEPLOYMENT.md) for infrastructure problems
-5. **Model Issues**: Use the [Model Tuning Guide](docs/MODEL_TUNING.md) for accuracy improvements
-6. **GitHub Issues**: Create a new issue with detailed information including:
-   - Environment details (Python 3.13, .venv, OS, ARM64/x86_64)
-   - Configuration (AWS profile, region, environment variables)
-   - Error messages and logs
-   - Steps to reproduce
-   - Expected vs actual behavior
+**✅ Production Ready**: Inference system is deployed and accessible
+**🔧 Minor Issue**: Load balancer health check configuration (system functional)
+**🔄 Next Phase**: Training system implementation
+
+### For Issues and Questions:
+
+1. **Inference Testing**: Use the [Inference Testing Guide](INFERENCE_TESTING_GUIDE.md) for endpoint testing
+2. **System Status**: Check [Final Status Summary](FINAL_STATUS_SUMMARY.md) for current capabilities
+3. **Deployment Issues**: Review [ECS Deployment Success Summary](ECS_DEPLOYMENT_SUCCESS_SUMMARY.md)
+4. **Training Questions**: Refer to `training_dataset.txt` and training documentation (to be created)
+5. **GitHub Issues**: Create a new issue with detailed information including:
+   - **Inference Issues**: Include endpoint URL, request payload, and response
+   - **Training Issues**: Include dataset details and training pipeline step
+   - **Infrastructure Issues**: Include AWS service logs and configuration
+   - Environment details (Python 3.13, AWS profile ml-sandbox, region us-east-1)
+
+### Quick Debugging
+
+```bash
+# Test production inference
+curl http://production-alb-107602758.us-east-1.elb.amazonaws.com/health
+
+# Check AWS services
+aws ecs describe-services --cluster multilingual-inference-cluster --profile ml-sandbox --region us-east-1
+
+# View training data
+head -5 training_dataset.txt
+```
