@@ -331,13 +331,9 @@ Resources:
   StorageStack:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Sub 'https://s3.amazonaws.com/${AWS::StackName}-templates-${AWS::AccountId}/storage-stack.yaml'
+      TemplateURL: !Sub 'https://s3.amazonaws.com/${AWS::StackName}-templates-${AWS::AccountId}/minimal-storage-stack.yaml'
       Parameters:
         Environment: !Ref Environment
-        VpcId: !Ref VPC
-        PrivateSubnet1Id: !Ref PrivateSubnet1
-        PrivateSubnet2Id: !Ref PrivateSubnet2
-        EFSSecurityGroupId: !Ref EFSSecurityGroup
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -397,8 +393,3 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-LoadBalancerDNS'
 
-  EFSFileSystemId:
-    Description: EFS File System ID
-    Value: !GetAtt StorageStack.Outputs.EFSFileSystemId
-    Export:
-      Name: !Sub '${AWS::StackName}-EFSFileSystemId'

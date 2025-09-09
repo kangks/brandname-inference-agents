@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Simplified storage stack with just EFS for testing'
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Environment name
+  
+  VpcId:
+    Type: String
+    Description: VPC ID
+  
+  PrivateSubnet1Id:
+    Type: String
+    Description: Private Subnet 1 ID
+  
+  PrivateSubnet2Id:
+    Type: String
+    Description: Private Subnet 2 ID
+  
+  EFSSecurityGroupId:
+    Type: String
+    Description: EFS Security Group ID
+
+Resources:
+  # EFS File System - simplified version
+  EFSFileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      CreationToken: !Sub '${AWS::StackName}-milvus-data-simple'
+      PerformanceMode: generalPurpose
+      ThroughputMode: bursting
+      Encrypted: true
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-milvus-storage-simple'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # EFS Mount Targets
+  EFSMountTarget1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      SubnetId: !Ref PrivateSubnet1Id
+      SecurityGroups:
+        - !Ref EFSSecurityGroupId
+
+  EFSMountTarget2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      SubnetId: !Ref PrivateSubnet2Id
+      SecurityGroups:
+        - !Ref EFSSecurityGroupId
+
+Outputs:
+  EFSFileSystemId:
+    Description: EFS File System ID
+    Value: !Ref EFSFileSystem
+    Export:
+      Name: !Sub '${AWS::StackName}-EFSFileSystemId'

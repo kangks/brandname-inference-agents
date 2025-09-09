@@ -40,7 +40,7 @@ upload_templates() {
         --profile $AWS_PROFILE \
         --region $AWS_REGION
     
-    aws s3 cp infrastructure/cloudformation/storage-stack.yaml s3://$bucket_name/ \
+    aws s3 cp infrastructure/cloudformation/minimal-storage-stack.yaml s3://$bucket_name/ \
         --profile $AWS_PROFILE \
         --region $AWS_REGION
     
@@ -132,7 +132,7 @@ validate_templates() {
         "infrastructure/cloudformation/main-stack.yaml"
         "infrastructure/cloudformation/ecs-stack.yaml"
         "infrastructure/cloudformation/alb-stack.yaml"
-        "infrastructure/cloudformation/storage-stack.yaml"
+        "infrastructure/cloudformation/minimal-storage-stack.yaml"
         "infrastructure/cloudformation/monitoring-stack.yaml"
     )
     

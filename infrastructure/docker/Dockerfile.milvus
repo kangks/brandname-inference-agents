@@ -1,5 +1,5 @@
 # Dockerfile for Milvus Vector Database - ARM64 platform
-FROM --platform=linux/arm64 milvusdb/milvus:v2.3.4
+FROM milvusdb/milvus:v2.3.4
 
 # Set working directory
 WORKDIR /milvus
@@ -11,7 +11,7 @@ COPY infrastructure/milvus/milvus.yaml /milvus/configs/milvus.yaml
 RUN mkdir -p /var/lib/milvus/data \
     && mkdir -p /var/lib/milvus/logs \
     && mkdir -p /var/lib/milvus/wal \
-    && chown -R milvus:milvus /var/lib/milvus
+    && chmod -R 755 /var/lib/milvus
 
 # Expose Milvus ports
 EXPOSE 19530 9091

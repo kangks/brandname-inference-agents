@@ -29,10 +29,8 @@ Resources:
     Properties:
       CreationToken: !Sub '${AWS::StackName}-milvus-data'
       PerformanceMode: generalPurpose
-      ThroughputMode: provisioned
-      ProvisionedThroughputInMibps: 100
+      ThroughputMode: bursting
       Encrypted: true
-      KmsKeyId: alias/aws/elasticfilesystem
       FileSystemTags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-milvus-storage'
@@ -110,7 +108,6 @@ Resources:
   ModelArtifactsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-model-artifacts-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -150,7 +147,6 @@ Resources:
   TrainingDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-training-data-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:

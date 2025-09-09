@@ -19,9 +19,8 @@
   },
   "serviceRegistries": [
     {
-      "registryArn": "arn:aws:servicediscovery:us-east-1:ACCOUNT_ID:service/srv-MILVUS",
-      "containerName": "milvus-standalone",
-      "containerPort": 19530
+      "registryArn": "arn:aws:servicediscovery:us-east-1:654654616949:service/srv-zngmejuwwit2nvn2",
+      "containerName": "milvus-standalone"
     }
   ],
   "deploymentConfiguration": {
@@ -33,12 +32,7 @@
     }
   },
   "enableExecuteCommand": true,
-  "placementStrategy": [
-    {
-      "type": "spread",
-      "field": "attribute:ecs.availability-zone"
-    }
-  ],
+
   "tags": [
     {
       "key": "Environment",

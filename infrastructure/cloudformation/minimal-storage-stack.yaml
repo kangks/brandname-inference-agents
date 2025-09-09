@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Minimal storage stack with just S3 buckets for testing'
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Environment name
+
+Resources:
+  # S3 Bucket for model artifacts and training data
+  ModelArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+          - Id: TransitionToIA
+            Status: Enabled
+            Transition:
+              StorageClass: STANDARD_IA
+              TransitionInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-model-artifacts'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: model-storage
+
+  # S3 Bucket for training datasets
+  TrainingDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+          - Id: TransitionToIA
+            Status: Enabled
+            Transition:
+              StorageClass: STANDARD_IA
+              TransitionInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-training-data'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: training-data-storage
+
+Outputs:
+  ModelArtifactsBucketName:
+    Description: Model Artifacts S3 Bucket Name
+    Value: !Ref ModelArtifactsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ModelArtifactsBucketName'
+
+  TrainingDataBucketName:
+    Description: Training Data S3 Bucket Name
+    Value: !Ref TrainingDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-TrainingDataBucketName'

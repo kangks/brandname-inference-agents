@@ -681,6 +681,48 @@ class StrandsMultiAgentOrchestrator(Agent):
                 "success": False
             }
     
+    async def initialize(self) -> None:
+        """
+        Initialize the orchestrator and its agents.
+        
+        This method is called by the server to initialize the orchestrator.
+        It ensures all specialized agents are created and ready.
+        """
+        try:
+            # Create default agents if none exist
+            if not self.specialized_agents:
+                self._create_default_agents()
+            
+            self.logger.info(f"Orchestrator initialized with {len(self.specialized_agents)} agents")
+            
+        except Exception as e:
+            self.logger.error(f"Orchestrator initialization failed: {e}")
+            raise AgentInitializationError(f"Could not initialize orchestrator: {e}")
+    
+    async def cleanup(self) -> None:
+        """
+        Cleanup orchestrator resources.
+        
+        This method is called by the server during shutdown.
+        """
+        try:
+            # Clear specialized agents
+            self.specialized_agents.clear()
+            self.logger.info("Orchestrator cleanup completed")
+            
+        except Exception as e:
+            self.logger.warning(f"Orchestrator cleanup failed: {e}")
+    
+    @property
+    def agents(self) -> Dict[str, Any]:
+        """
+        Get the specialized agents dictionary for compatibility with server code.
+        
+        Returns:
+            Dictionary of specialized agents
+        """
+        return self.specialized_agents
+
     def get_agent_status(self) -> Dict[str, Any]:
         """
         Get status of all specialized agents and multiagent tools.
@@ -740,25 +782,12 @@ class StrandsMultiAgentOrchestrator(Agent):
         """
         result = await self.orchestrate_multiagent_inference(input_data.product_name)
         
-        # Convert to expected format for compatibility
+        # Convert to expected format for server response
         return {
-            "product_name": input_data.product_name,
-            "language": input_data.language_hint.value if hasattr(input_data, 'language_hint') else "auto",
-            "brand_predictions": [
-                {
-                    "brand": result.get("best_prediction", "Unknown"),
-                    "confidence": result.get("best_confidence", 0.0),
-                    "method": result.get("best_method", "multiagent")
-                }
-            ],
-            "entities": [],  # Would be populated from NER agent results
-            "processing_time_ms": int(result.get("orchestration_time", 0.0) * 1000),
-            "agent_used": "strands_multiagent_orchestrator",
-            "coordination_method": result.get("coordination_method", "swarm"),
-            "specialized_agents": result.get("specialized_agents", []),
-            "agent_results": result.get("agent_results", {}),
-            "multiagent_tools_used": result.get("strands_tools_used", []),
-            "timestamp": time.time()
+            "success": True,
+            "result": result,
+            "processing_time": result.get("orchestration_time", 0.0),
+            "agent_type": "strands_multiagent_orchestrator"
         }
     
     def cleanup(self) -> None:
@@ -864,5 +893,49 @@ def create_multiagent_orchestrator_example():
     }
 
 
+def create_orchestrator_agent(config: Optional[Dict[str, Any]] = None) -> StrandsMultiAgentOrchestrator:
+    """
+    Factory function to create an orchestrator agent instance.
+    
+    This function creates and returns a StrandsMultiAgentOrchestrator instance
+    that coordinates multiple specialized agents for brand name inference.
+    
+    Args:
+        config: Optional configuration dictionary for the orchestrator
+        
+    Returns:
+        StrandsMultiAgentOrchestrator: Configured orchestrator instance
+        
+    Example:
+        >>> orchestrator = create_orchestrator_agent()
+        >>> result = await orchestrator.orchestrate_multiagent_inference("iPhone 15 Pro")
+        >>> print(result['best_prediction'])  # Should output brand name like "Apple"
+    """
+    try:
+        # Create orchestrator with provided or default config
+        orchestrator = StrandsMultiAgentOrchestrator(config)
+        
+        # Initialize default agents if none exist
+        if not orchestrator.specialized_agents:
+            orchestrator._create_default_agents()
+        
+        logging.getLogger(__name__).info(
+            f"Created orchestrator with {len(orchestrator.specialized_agents)} specialized agents"
+        )
+        
+        return orchestrator
+        
+    except Exception as e:
+        logging.getLogger(__name__).error(f"Failed to create orchestrator agent: {e}")
+        raise AgentInitializationError(f"Could not create orchestrator: {e}")
 
 
+# Export the main classes and functions
+__all__ = [
+    'StrandsMultiAgentOrchestrator',
+    'create_orchestrator_agent',
+    'OrchestratorAgent',
+    'AgentError',
+    'AgentTimeoutError', 
+    'AgentInitializationError'
+]

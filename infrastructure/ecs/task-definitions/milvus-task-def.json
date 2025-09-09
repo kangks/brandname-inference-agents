@@ -8,17 +8,17 @@
     "cpuArchitecture": "ARM64",
     "operatingSystemFamily": "LINUX"
   },
-  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/ecsTaskExecutionRole",
-  "taskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/multilingual-inference-task-role",
+  "executionRoleArn": "arn:aws:iam::654654616949:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::654654616949:role/multilingual-inference-task-role",
   "volumes": [
     {
       "name": "milvus-data",
       "efsVolumeConfiguration": {
-        "fileSystemId": "fs-XXXXXXXXX",
-        "rootDirectory": "/milvus-data",
+        "fileSystemId": "fs-03d716e7cee12520f",
+        "rootDirectory": "/",
         "transitEncryption": "ENABLED",
         "authorizationConfig": {
-          "accessPointId": "fsap-XXXXXXXXX",
+          "accessPointId": "fsap-01dc4d233bf104d38",
           "iam": "ENABLED"
         }
       }
@@ -26,11 +26,11 @@
     {
       "name": "milvus-logs",
       "efsVolumeConfiguration": {
-        "fileSystemId": "fs-XXXXXXXXX",
-        "rootDirectory": "/milvus-logs",
+        "fileSystemId": "fs-03d716e7cee12520f",
+        "rootDirectory": "/",
         "transitEncryption": "ENABLED",
         "authorizationConfig": {
-          "accessPointId": "fsap-YYYYYYYYY",
+          "accessPointId": "fsap-0fa2c535bd536c081",
           "iam": "ENABLED"
         }
       }
@@ -39,7 +39,7 @@
   "containerDefinitions": [
     {
       "name": "milvus-standalone",
-      "image": "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/multilingual-inference-milvus:latest",
+      "image": "654654616949.dkr.ecr.us-east-1.amazonaws.com/multilingual-inference-milvus:latest",
       "essential": true,
       "portMappings": [
         {
@@ -98,7 +98,7 @@
     },
     {
       "name": "etcd",
-      "image": "quay.io/coreos/etcd:v3.5.5-arm64",
+      "image": "quay.io/coreos/etcd:v3.5.5",
       "essential": true,
       "portMappings": [
         {
@@ -145,7 +145,7 @@
     },
     {
       "name": "minio",
-      "image": "minio/minio:RELEASE.2023-03-20T20-16-18Z-arm64",
+      "image": "minio/minio:RELEASE.2023-03-20T20-16-18Z",
       "essential": true,
       "portMappings": [
         {

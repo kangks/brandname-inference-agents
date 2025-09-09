@@ -342,7 +342,6 @@ Resources:
   CloudWatchAgentRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-multilingual-inference-cloudwatch-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:

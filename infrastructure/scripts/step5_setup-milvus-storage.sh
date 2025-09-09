@@ -25,12 +25,17 @@ create_efs_filesystem() {
         --region $AWS_REGION \
         --creation-token "multilingual-inference-milvus-data-$(date +%s)" \
         --performance-mode generalPurpose \
-        --throughput-mode provisioned \
-        --provisioned-throughput-in-mibps 100 \
+        --throughput-mode bursting \
         --encrypted \
-        --tags Key=Name,Value=multilingual-inference-milvus-storage Key=Environment,Value=production Key=Service,Value=milvus Key=Platform,Value=ARM64 \
         --query 'FileSystemId' \
         --output text)
+    
+    # Add tags to the EFS file system
+    aws efs tag-resource \
+        --profile $AWS_PROFILE \
+        --region $AWS_REGION \
+        --resource-id $EFS_ID \
+        --tags Key=Name,Value=multilingual-inference-milvus-storage Key=Environment,Value=production Key=Service,Value=milvus Key=Platform,Value=ARM64
     
     echo "Created EFS file system: $EFS_ID"
     
