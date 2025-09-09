@@ -75,7 +75,7 @@ class AgentRegistry:
         self.agent_configs["llm"] = {
             "aws_profile": self.system_config.aws.profile_name,
             "aws_region": self.system_config.aws.region,
-            "model_id": "amazon.nova-pro-v1:0",
+            "model_id": "us.amazon.nova-pro-v1:0",
             "max_tokens": 1000,
             "temperature": 0.1,
             "top_p": 0.9,

@@ -123,7 +123,7 @@ class LLMResult:
     reasoning: str
     confidence: float
     processing_time: float
-    model_id: str = "amazon.nova-pro-v1:0"
+    model_id: str = "us.amazon.nova-pro-v1:0"
     
     def __post_init__(self) -> None:
         """Validate LLM result data."""

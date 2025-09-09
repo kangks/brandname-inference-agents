@@ -104,7 +104,7 @@ class StrandsMultiAgentOrchestrator(Agent):
             ])
         
         super().__init__(
-            model="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+            model="us.amazon.nova-pro-v1:0",
             tools=tools_list,
             system_prompt="""You are an advanced brand extraction orchestrator that coordinates 
             multiple specialized AI agents using Strands multiagent capabilities.
@@ -147,7 +147,7 @@ class StrandsMultiAgentOrchestrator(Agent):
         agent_id = f"ner_agent_{uuid.uuid4().hex[:8]}"
         
         ner_agent = Agent(
-            model="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+            model="us.amazon.nova-pro-v1:0",
             name=f"NER_Agent_{agent_id}",  # Ensure unique name for Swarm
             system_prompt="""You are a specialized Named Entity Recognition (NER) agent 
             focused on extracting brand names from product descriptions.
@@ -179,7 +179,7 @@ class StrandsMultiAgentOrchestrator(Agent):
         agent_id = f"rag_agent_{uuid.uuid4().hex[:8]}"
         
         rag_agent = Agent(
-            model="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+            model="us.amazon.nova-pro-v1:0",
             name=f"RAG_Agent_{agent_id}",  # Ensure unique name for Swarm
             system_prompt="""You are a specialized RAG agent for brand inference using 
             vector similarity search and product knowledge retrieval.
@@ -211,7 +211,7 @@ class StrandsMultiAgentOrchestrator(Agent):
         agent_id = f"llm_agent_{uuid.uuid4().hex[:8]}"
         
         llm_agent = Agent(
-            model="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+            model="us.amazon.nova-pro-v1:0",
             name=f"LLM_Agent_{agent_id}",  # Ensure unique name for Swarm
             system_prompt="""You are a specialized LLM reasoning agent for brand extraction 
             using advanced language understanding and contextual analysis.
@@ -243,7 +243,7 @@ class StrandsMultiAgentOrchestrator(Agent):
         agent_id = f"hybrid_agent_{uuid.uuid4().hex[:8]}"
         
         hybrid_agent = Agent(
-            model="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+            model="us.amazon.nova-pro-v1:0",
             name=f"Hybrid_Agent_{agent_id}",  # Ensure unique name for Swarm
             system_prompt="""You are a specialized Hybrid agent that combines NER, RAG, 
             and LLM approaches for comprehensive brand extraction.

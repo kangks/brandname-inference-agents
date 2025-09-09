@@ -58,7 +58,7 @@ class StrandsLLMAgent(LLMAgent):
         super().__init__("strands_llm", config)
         
         # Model configuration
-        self.model_id = self.get_config_value("model_id", "us.anthropic.claude-3-7-sonnet-20250219-v1:0")
+        self.model_id = self.get_config_value("model_id", "amazon.nova-pro-v1:0")
         self.max_tokens = self.get_config_value("max_tokens", 1000)
         self.temperature = self.get_config_value("temperature", 0.1)
         self.top_p = self.get_config_value("top_p", 0.9)

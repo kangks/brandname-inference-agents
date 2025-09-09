@@ -405,7 +405,7 @@ class ModelRegistry:
         if "default" not in self._models["llm"]:
             self.register_llm_model(
                 name="default",
-                model_id="amazon.nova-pro-v1:0",
+                model_id="us.amazon.nova-pro-v1:0",
                 description="Default AWS Nova Pro model",
                 version="1.0.0",
                 region="us-east-1",

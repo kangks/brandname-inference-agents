@@ -78,7 +78,7 @@ class EmbeddingModelConfig:
 ```python
 @dataclass
 class LLMModelConfig:
-    model_id: str = "amazon.nova-pro-v1:0"
+    model_id: str = "us.amazon.nova-pro-v1:0"
     region: str = "us-east-1"
     max_tokens: int = 1000
     temperature: float = 0.1
