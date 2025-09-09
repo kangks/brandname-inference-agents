@@ -30,9 +30,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN python -m spacy download en_core_web_sm
 
 # Copy application code
-COPY inference/ ./inference/
-COPY training/ ./training/
-COPY tests/ ./tests/
+COPY src/ ./inference/
 COPY pyproject.toml .
 
 # Install the package in development mode
