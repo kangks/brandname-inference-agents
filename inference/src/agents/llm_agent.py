@@ -1,7 +1,7 @@
 """
-Large Language Model (LLM) Agent implementation using AWS Bedrock.
+Large Language Model (LLM) Agent implementation using Strands Agents.
 
-This module implements Nova Pro inference client using AWS Bedrock SDK with PEP 8
+This module implements LLM inference using Strands Agents SDK with PEP 8
 compliant code, referencing patterns from the notebook implementation for multilingual
 brand extraction with proper prompt engineering.
 """
@@ -14,12 +14,23 @@ from typing import Dict, Any, Optional, List
 import logging
 
 try:
-    import boto3
-    from botocore.exceptions import ClientError, BotoCoreError
+    from strands import Agent, tool
+    STRANDS_AVAILABLE = True
 except ImportError:
-    boto3 = None
-    ClientError = Exception
-    BotoCoreError = Exception
+    STRANDS_AVAILABLE = False
+    
+    # Fallback for development without strands-agents
+    class Agent:
+        def __init__(self, model=None, tools=None, system_prompt=None, **kwargs):
+            self.model = model
+            self.tools = tools or []
+            self.system_prompt = system_prompt
+            
+        def __call__(self, message):
+            return f"Mock response for: {message}"
+    
+    def tool(func):
+        return func
 
 from ..models.data_models import (
     ProductInput,
@@ -29,29 +40,25 @@ from ..models.data_models import (
 from .base_agent import LLMAgent, AgentError, AgentInitializationError
 
 
-class BedrockLLMAgent(LLMAgent):
+class StrandsLLMAgent(LLMAgent):
     """
-    AWS Bedrock LLM agent using Nova Pro for brand inference.
+    Strands LLM agent for brand inference.
     
-    Implements multilingual brand extraction using fine-tuned Nova Pro models
-    via AWS Bedrock, following patterns from the reference notebook.
+    Implements multilingual brand extraction using Strands Agents SDK,
+    following patterns from the reference notebook.
     """
     
     def __init__(self, config: Dict[str, Any]) -> None:
         """
-        Initialize Bedrock LLM agent.
+        Initialize Strands LLM agent.
         
         Args:
-            config: Configuration dictionary containing AWS and model settings
+            config: Configuration dictionary containing model and inference settings
         """
-        super().__init__("bedrock_llm", config)
-        
-        # AWS configuration
-        self.aws_profile = self.get_config_value("aws_profile", "ml-sandbox")
-        self.aws_region = self.get_config_value("aws_region", "us-east-1")
+        super().__init__("strands_llm", config)
         
         # Model configuration
-        self.model_id = self.get_config_value("model_id", "amazon.nova-pro-v1:0")
+        self.model_id = self.get_config_value("model_id", "us.anthropic.claude-3-7-sonnet-20250219-v1:0")
         self.max_tokens = self.get_config_value("max_tokens", 1000)
         self.temperature = self.get_config_value("temperature", 0.1)
         self.top_p = self.get_config_value("top_p", 0.9)
@@ -61,9 +68,8 @@ class BedrockLLMAgent(LLMAgent):
         self.max_text_length = self.get_config_value("max_text_length", 1000)
         self.timeout_seconds = self.get_config_value("timeout_seconds", 30)
         
-        # Initialize AWS clients
-        self.bedrock_runtime = None
-        self.session = None
+        # Initialize Strands agent
+        self.strands_agent = None
         
         # Prompt templates for different scenarios
         self.base_prompt_template = self._get_base_prompt_template()
@@ -132,92 +138,65 @@ Respond with only the brand name, nothing else.
 </question>"""
     
     async def initialize(self) -> None:
-        """Initialize AWS Bedrock client and validate configuration."""
+        """Initialize Strands agent and validate configuration."""
         try:
-            if boto3 is None:
+            if not STRANDS_AVAILABLE:
                 raise AgentInitializationError(
                     self.agent_name,
-                    "boto3 library not installed. Please install with: pip install boto3"
+                    "strands library not installed. Please install with: pip install strands-agents"
                 )
             
-            # Initialize AWS session with profile
-            self.logger.info(f"Initializing AWS session with profile: {self.aws_profile}")
-            self.session = boto3.Session(profile_name=self.aws_profile)
+            # Initialize Strands agent
+            self.logger.info(f"Initializing Strands agent with model: {self.model_id}")
             
-            # Initialize Bedrock Runtime client
-            self.bedrock_runtime = self.session.client(
-                service_name="bedrock-runtime",
-                region_name=self.aws_region
+            # Create system prompt for brand extraction
+            system_prompt = """You are a specialized brand extraction agent that identifies brand names from product titles.
+
+Your expertise includes:
+- Extracting brand names from multilingual text (Thai/English mixed content)
+- Handling product name variations and transliterations
+- Providing confidence assessments for extractions
+- Recognizing brand patterns in e-commerce contexts
+
+Always respond with just the brand name, nothing else. If no clear brand can be identified, respond with "Unknown"."""
+
+            self.strands_agent = Agent(
+                model=self.model_id,
+                system_prompt=system_prompt
             )
             
-            # Validate AWS credentials and model access
-            await self._validate_aws_access()
+            # Validate agent access with a simple test
+            await self._validate_agent_access()
             
             self.set_initialized(True)
-            self.logger.info("Bedrock LLM agent initialized successfully")
+            self.logger.info("Strands LLM agent initialized successfully")
             
         except Exception as e:
             self.set_initialized(False)
             raise AgentInitializationError(
                 self.agent_name,
-                f"Failed to initialize Bedrock LLM agent: {str(e)}",
+                f"Failed to initialize Strands LLM agent: {str(e)}",
                 e
             )
     
-    async def _validate_aws_access(self) -> None:
-        """Validate AWS credentials and Bedrock model access."""
+    async def _validate_agent_access(self) -> None:
+        """Validate Strands agent access with a simple test."""
         try:
-            # Test AWS credentials by making a simple call
-            loop = asyncio.get_event_loop()
+            # Test agent with a simple call
+            test_response = self.strands_agent("Test")
             
-            # Create a minimal test payload
-            test_payload = {
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [{"text": "Hello"}]
-                    }
-                ],
-                "inferenceConfig": {
-                    "maxTokens": 10,
-                    "temperature": 0.1
-                }
-            }
-            
-            # Test model access with a simple call
-            await loop.run_in_executor(
-                None,
-                lambda: self.bedrock_runtime.invoke_model(
-                    modelId=self.model_id,
-                    body=json.dumps(test_payload)
+            if not test_response:
+                raise AgentInitializationError(
+                    self.agent_name,
+                    "Agent returned empty response during validation"
                 )
-            )
             
             self.logger.info(f"Successfully validated access to model: {self.model_id}")
             
-        except ClientError as e:
-            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
-            if error_code == 'AccessDeniedException':
-                raise AgentInitializationError(
-                    self.agent_name,
-                    f"Access denied to Bedrock model {self.model_id}. "
-                    f"Check AWS permissions and model availability."
-                )
-            elif error_code == 'ValidationException':
-                raise AgentInitializationError(
-                    self.agent_name,
-                    f"Invalid model ID: {self.model_id}. "
-                    f"Please check the model ID and region."
-                )
-            else:
-                raise AgentInitializationError(
-                    self.agent_name,
-                    f"AWS Bedrock validation failed: {str(e)}"
-                )
         except Exception as e:
             raise AgentInitializationError(
                 self.agent_name,
-                f"Failed to validate AWS Bedrock access: {str(e)}"
+                f"Failed to validate Strands agent access: {str(e)}"
             )
     
     async def process(self, input_data: ProductInput) -> Dict[str, Any]:
@@ -256,7 +235,7 @@ Respond with only the brand name, nothing else.
     
     async def infer_brand(self, product_name: str, context: Optional[str] = None) -> LLMResult:
         """
-        Infer brand using Nova Pro model via AWS Bedrock.
+        Infer brand using Strands agent.
         
         Args:
             product_name: Input product name text
@@ -267,7 +246,7 @@ Respond with only the brand name, nothing else.
         """
         start_time = time.time()
         
-        if not self.bedrock_runtime:
+        if not self.strands_agent:
             raise AgentError(self.agent_name, "Agent not initialized")
         
         # Preprocess and validate input
@@ -280,14 +259,11 @@ Respond with only the brand name, nothing else.
         # Select appropriate prompt template
         prompt = self._build_prompt(cleaned_text, context)
         
-        # Create Bedrock payload
-        payload = self._create_bedrock_payload(prompt)
-        
-        # Invoke model with timeout
-        response_data = await self._invoke_model_with_timeout(payload)
+        # Invoke agent with timeout
+        response_text = await self._invoke_agent_with_timeout(prompt)
         
         # Extract and process response
-        predicted_brand, reasoning = self._extract_brand_from_response(response_data)
+        predicted_brand, reasoning = self._extract_brand_from_response(response_text)
         
         # Calculate confidence score
         confidence = self._calculate_confidence(predicted_brand, reasoning, cleaned_text)
@@ -386,103 +362,55 @@ Respond with only the brand name, nothing else.
         
         return prompt
     
-    def _create_bedrock_payload(self, prompt: str) -> Dict[str, Any]:
+    async def _invoke_agent_with_timeout(self, prompt: str) -> str:
         """
-        Create Bedrock API payload following notebook patterns.
+        Invoke Strands agent with timeout handling.
         
         Args:
             prompt: Formatted prompt string
             
         Returns:
-            Bedrock API payload dictionary
-        """
-        return {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "text": prompt
-                        }
-                    ]
-                }
-            ],
-            "inferenceConfig": {
-                "maxTokens": self.max_tokens,
-                "temperature": self.temperature,
-                "topP": self.top_p
-            }
-        }
-    
-    async def _invoke_model_with_timeout(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Invoke Bedrock model with timeout handling.
-        
-        Args:
-            payload: Bedrock API payload
-            
-        Returns:
-            Response data from Bedrock
+            Response text from agent
         """
         try:
+            # Invoke agent with timeout
             loop = asyncio.get_event_loop()
-            
-            # Invoke model with timeout
             response = await asyncio.wait_for(
                 loop.run_in_executor(
                     None,
-                    lambda: self.bedrock_runtime.invoke_model(
-                        modelId=self.model_id,
-                        body=json.dumps(payload)
-                    )
+                    lambda: self.strands_agent(prompt)
                 ),
                 timeout=self.timeout_seconds
             )
             
-            # Parse response
-            response_body = json.loads(response.get("body").read().decode("utf-8"))
-            return response_body
+            return str(response)
             
         except asyncio.TimeoutError:
             raise AgentError(
                 self.agent_name,
-                f"Model inference timed out after {self.timeout_seconds} seconds"
-            )
-        except ClientError as e:
-            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
-            error_message = e.response.get('Error', {}).get('Message', str(e))
-            raise AgentError(
-                self.agent_name,
-                f"Bedrock API error ({error_code}): {error_message}"
+                f"Agent inference timed out after {self.timeout_seconds} seconds"
             )
         except Exception as e:
             raise AgentError(
                 self.agent_name,
-                f"Model invocation failed: {str(e)}"
+                f"Agent invocation failed: {str(e)}"
             )
     
-    def _extract_brand_from_response(self, response_data: Dict[str, Any]) -> tuple[str, str]:
+    def _extract_brand_from_response(self, response_text: str) -> tuple[str, str]:
         """
-        Extract brand name and reasoning from Bedrock response.
+        Extract brand name and reasoning from Strands agent response.
         
         Args:
-            response_data: Response data from Bedrock
+            response_text: Response text from Strands agent
             
         Returns:
             Tuple of (predicted_brand, reasoning)
         """
         try:
-            # Extract content from response following Nova response structure
-            content = response_data.get("output", {}).get("message", {}).get("content", [])
-            
-            if not content:
-                return "Unknown", "No response content received"
-            
-            # Get text from first content item
-            response_text = content[0].get("text", "").strip()
-            
             if not response_text:
                 return "Unknown", "Empty response received"
+            
+            response_text = response_text.strip()
             
             # Extract brand name from response
             predicted_brand = self._parse_brand_from_text(response_text)
@@ -492,7 +420,7 @@ Respond with only the brand name, nothing else.
             
             return predicted_brand, reasoning
             
-        except (KeyError, IndexError, AttributeError) as e:
+        except Exception as e:
             self.logger.warning(f"Error parsing response: {e}")
             return "Unknown", f"Failed to parse response: {str(e)}"
     
@@ -602,23 +530,20 @@ Respond with only the brand name, nothing else.
         return min(1.0, max(0.0, confidence))
     
     async def cleanup(self) -> None:
-        """Clean up Bedrock LLM agent resources."""
-        if self.bedrock_runtime:
-            # Bedrock client doesn't require explicit cleanup
-            self.bedrock_runtime = None
-        
-        if self.session:
-            self.session = None
+        """Clean up Strands LLM agent resources."""
+        if self.strands_agent:
+            # Strands agent doesn't require explicit cleanup
+            self.strands_agent = None
         
         self.set_initialized(False)
-        self.logger.info("Bedrock LLM agent cleaned up")
+        self.logger.info("Strands LLM agent cleaned up")
     
     async def _perform_health_check(self) -> None:
         """Perform LLM agent specific health check."""
         await super()._perform_health_check()
         
-        if not self.bedrock_runtime:
-            raise RuntimeError("Bedrock client not initialized")
+        if not self.strands_agent:
+            raise RuntimeError("Strands agent not initialized")
         
         # Test with a simple inference
         try:
@@ -629,23 +554,23 @@ Respond with only the brand name, nothing else.
             raise RuntimeError(f"Health check inference failed: {e}")
 
 
-class EnhancedBedrockLLMAgent(BedrockLLMAgent):
+class EnhancedStrandsLLMAgent(StrandsLLMAgent):
     """
-    Enhanced Bedrock LLM agent with additional features.
+    Enhanced Strands LLM agent with additional features.
     
-    Extends the base Bedrock agent with improved prompt engineering,
+    Extends the base Strands agent with improved prompt engineering,
     context-aware inference, and enhanced multilingual support.
     """
     
     def __init__(self, config: Dict[str, Any]) -> None:
         """
-        Initialize enhanced Bedrock LLM agent.
+        Initialize enhanced Strands LLM agent.
         
         Args:
             config: Configuration dictionary with enhanced settings
         """
         super().__init__(config)
-        self.agent_name = "enhanced_bedrock_llm"
+        self.agent_name = "enhanced_strands_llm"
         
         # Enhanced configuration
         self.use_context_enhancement = self.get_config_value("use_context_enhancement", True)
@@ -724,3 +649,8 @@ class EnhancedBedrockLLMAgent(BedrockLLMAgent):
         enhanced_confidence = base_confidence + (context_boost * self.context_weight)
         
         return min(1.0, enhanced_confidence)
+
+
+# Backward compatibility aliases
+BedrockLLMAgent = StrandsLLMAgent
+EnhancedBedrockLLMAgent = EnhancedStrandsLLMAgent
