@@ -12,11 +12,8 @@ from typing import List, Dict, Any, Optional, Tuple
 import logging
 import asyncio
 
-try:
-    import spacy
-    from spacy.lang.xx import MultiLanguage
-except ImportError:
-    spacy = None
+import spacy
+from spacy.lang.xx import MultiLanguage
 
 from ..models.data_models import (
     ProductInput,
@@ -70,11 +67,6 @@ class SpacyNERAgent(NERAgent):
     async def initialize(self) -> None:
         """Initialize spaCy model and resources."""
         try:
-            if spacy is None:
-                raise AgentInitializationError(
-                    self.agent_name,
-                    "spaCy library not installed. Please install with: pip install spacy"
-                )
             
             # Try to load the model
             try:

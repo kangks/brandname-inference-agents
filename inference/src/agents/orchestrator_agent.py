@@ -13,39 +13,9 @@ from typing import Dict, Any, Optional, List, Tuple
 import logging
 from concurrent.futures import TimeoutError as ConcurrentTimeoutError
 
-try:
-    from strands import Agent, tool
-    from strands.multiagent import Swarm, GraphBuilder
-    from strands_tools import journal  # Keep journal as a tool
-    STRANDS_AVAILABLE = True
-    MULTIAGENT_AVAILABLE = True
-except ImportError:
-    # Fallback for development without strands-agents
-    STRANDS_AVAILABLE = False
-    MULTIAGENT_AVAILABLE = False
-    
-    class Agent:
-        def __init__(self, model=None, tools=None, system_prompt=None, **kwargs):
-            self.model = model
-            self.tools = tools or []
-            self.system_prompt = system_prompt
-            
-        def __call__(self, message):
-            return f"Mock response for: {message}"
-    
-    def tool(func):
-        return func
-    
-    # Mock classes for fallback
-    class Swarm:
-        def __init__(self, nodes, **kwargs):
-            self.nodes = nodes
-    
-    class GraphBuilder:
-        def __init__(self):
-            pass
-    
-    journal = None
+from strands import Agent, tool
+from strands.multiagent import Swarm, GraphBuilder
+from strands_tools import journal
 
 from ..models.data_models import (
     ProductInput,
@@ -87,21 +57,15 @@ class StrandsMultiAgentOrchestrator(Agent):
             config: Optional configuration dictionary
         """
         # Initialize Strands Agent with custom tools
-        tools_list = []
-        if STRANDS_AVAILABLE:
-            # Add journal tool if available
-            if journal:
-                tools_list.append(journal)
-            
-            # Add custom tools
-            tools_list.extend([
-                self.create_ner_agent,
-                self.create_rag_agent,
-                self.create_llm_agent,
-                self.create_hybrid_agent,
-                self.coordinate_inference,
-                self.aggregate_results
-            ])
+        tools_list = [
+            journal,
+            self.create_ner_agent,
+            self.create_rag_agent,
+            self.create_llm_agent,
+            self.create_hybrid_agent,
+            self.coordinate_inference,
+            self.aggregate_results
+        ]
         
         super().__init__(
             model="us.amazon.nova-pro-v1:0",
@@ -295,13 +259,11 @@ class StrandsMultiAgentOrchestrator(Agent):
         elif coordination_method == "workflow":
             return self._coordinate_with_workflow(product_name)
         else:
-            # Fallback to enhanced coordination
-            return self._coordinate_with_enhanced_fallback(product_name, coordination_method)
+            # Use enhanced coordination for unknown methods
+            return self._coordinate_with_enhanced_coordination(product_name, coordination_method)
     
     def _coordinate_with_swarm(self, product_name: str) -> Dict[str, Any]:
         """Coordinate using Strands Swarm class for parallel agent execution."""
-        if not MULTIAGENT_AVAILABLE:
-            return self._fallback_coordination(product_name)
         
         try:
             # Create list of agents for swarm coordination
@@ -374,12 +336,10 @@ Brand name:"""
             
         except Exception as e:
             self.logger.error(f"Swarm coordination failed: {e}")
-            return self._fallback_coordination(product_name)
+            raise AgentError(self.agent_name, f"Swarm coordination failed: {str(e)}")
     
     def _coordinate_with_agent_graph(self, product_name: str) -> Dict[str, Any]:
         """Coordinate using Strands GraphBuilder class for structured agent workflows."""
-        if not MULTIAGENT_AVAILABLE:
-            return self._fallback_coordination(product_name)
         
         try:
             # Create GraphBuilder instance
@@ -442,25 +402,22 @@ Brand name:"""
             
         except Exception as e:
             self.logger.error(f"Agent graph coordination failed: {e}")
-            return self._fallback_coordination(product_name)
+            raise AgentError(self.agent_name, f"Agent graph coordination failed: {str(e)}")
     
     def _coordinate_with_workflow(self, product_name: str) -> Dict[str, Any]:
         """Coordinate using Strands workflow tool for sequential processing."""
-        if not workflow or not STRANDS_AVAILABLE:
-            return self._fallback_coordination(product_name)
         
         try:
             # In v1.7.1, workflow tool should be used through the agent's tool system
-            # For now, use fallback until we can properly integrate with the tool system
-            self.logger.warning("Workflow tool integration needs proper tool system integration")
-            return self._fallback_coordination(product_name)
+            # For now, raise an error until we can properly integrate with the tool system
+            raise AgentError(self.agent_name, "Workflow tool integration needs proper tool system integration")
         except Exception as e:
             self.logger.error(f"Workflow coordination failed: {e}")
-            return self._fallback_coordination(product_name)
+            raise AgentError(self.agent_name, f"Workflow coordination failed: {str(e)}")
     
-    def _coordinate_with_enhanced_fallback(self, product_name: str, coordination_method: str) -> Dict[str, Any]:
-        """Enhanced fallback coordination that simulates multiagent behavior."""
-        self.logger.info(f"Using enhanced fallback coordination for {coordination_method}")
+    def _coordinate_with_enhanced_coordination(self, product_name: str, coordination_method: str) -> Dict[str, Any]:
+        """Enhanced coordination that uses Strands agents directly."""
+        self.logger.info(f"Using enhanced coordination for {coordination_method}")
         
         results = {}
         for agent_id, agent in self.specialized_agents.items():
@@ -647,43 +604,7 @@ Brand name:"""
         except Exception:
             return 0.6  # Default confidence for non-Unknown brands
     
-    def _fallback_coordination(self, product_name: str) -> Dict[str, Any]:
-        """Simple fallback coordination when Strands tools are not available."""
-        self.logger.warning("Using simple fallback coordination - Strands multiagent tools not available")
-        
-        # Simple parallel execution fallback with proper brand extraction
-        results = {}
-        for agent_id, agent in self.specialized_agents.items():
-            try:
-                # Always try direct extraction first for better results
-                predicted_brand = self._extract_brand_from_product_name(product_name)
-                
-                if predicted_brand != "Unknown":
-                    # Direct extraction successful
-                    confidence = 0.8
-                    response = f"Direct extraction: {predicted_brand}"
-                else:
-                    # Fall back to agent processing
-                    response = agent(f"Extract brand from product: {product_name}")
-                    predicted_brand = self._parse_brand_from_response(response, agent_id)
-                    confidence = self._calculate_response_confidence(response, predicted_brand)
-                
-                results[agent_id] = {
-                    "prediction": predicted_brand,
-                    "confidence": confidence,
-                    "method": agent_id.split('_')[0],
-                    "response": str(response)[:200] + "..." if len(str(response)) > 200 else str(response)
-                }
-            except Exception as e:
-                self.logger.error(f"Agent {agent_id} failed: {e}")
-                results[agent_id] = {"error": str(e)}
-        
-        return {
-            "method": "fallback",
-            "product_name": product_name,
-            "results": results,
-            "timestamp": time.time()
-        }
+
     
     def _aggregate_results_internal(self, coordination_results: Dict[str, Any]) -> Dict[str, Any]:
         """Internal method for aggregate_results without @tool decorator."""

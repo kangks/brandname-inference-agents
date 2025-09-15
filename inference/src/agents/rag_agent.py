@@ -12,17 +12,9 @@ from typing import List, Dict, Any, Optional, Tuple
 import logging
 import numpy as np
 
-try:
-    from sentence_transformers import SentenceTransformer
-except ImportError:
-    SentenceTransformer = None
-
-try:
-    from pymilvus import MilvusClient, connections
-    from pymilvus.exceptions import MilvusException
-except ImportError:
-    MilvusClient = None
-    MilvusException = Exception
+from sentence_transformers import SentenceTransformer
+from pymilvus import MilvusClient, connections
+from pymilvus.exceptions import MilvusException
 
 from ..models.data_models import (
     ProductInput,
@@ -80,12 +72,6 @@ class SentenceTransformerRAGAgent(RAGAgent):
         """Initialize embedding model and Milvus connection."""
         try:
             # Initialize SentenceTransformer
-            if SentenceTransformer is None:
-                raise AgentInitializationError(
-                    self.agent_name,
-                    "sentence-transformers library not installed. "
-                    "Please install with: pip install sentence-transformers"
-                )
             
             self.logger.info(f"Loading embedding model: {self.embedding_model_name}")
             loop = asyncio.get_event_loop()
@@ -106,12 +92,6 @@ class SentenceTransformerRAGAgent(RAGAgent):
                 self.embedding_dimension = actual_dim
             
             # Initialize Milvus client
-            if MilvusClient is None:
-                raise AgentInitializationError(
-                    self.agent_name,
-                    "pymilvus library not installed. "
-                    "Please install with: pip install pymilvus"
-                )
             
             self.logger.info(f"Connecting to Milvus: {self.milvus_uri}")
             self.milvus_client = MilvusClient(self.milvus_uri)

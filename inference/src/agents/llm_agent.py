@@ -13,24 +13,7 @@ import asyncio
 from typing import Dict, Any, Optional, List
 import logging
 
-try:
-    from strands import Agent, tool
-    STRANDS_AVAILABLE = True
-except ImportError:
-    STRANDS_AVAILABLE = False
-    
-    # Fallback for development without strands-agents
-    class Agent:
-        def __init__(self, model=None, tools=None, system_prompt=None, **kwargs):
-            self.model = model
-            self.tools = tools or []
-            self.system_prompt = system_prompt
-            
-        def __call__(self, message):
-            return f"Mock response for: {message}"
-    
-    def tool(func):
-        return func
+from strands import Agent, tool
 
 from ..models.data_models import (
     ProductInput,
@@ -140,11 +123,6 @@ Respond with only the brand name, nothing else.
     async def initialize(self) -> None:
         """Initialize Strands agent and validate configuration."""
         try:
-            if not STRANDS_AVAILABLE:
-                raise AgentInitializationError(
-                    self.agent_name,
-                    "strands library not installed. Please install with: pip install strands-agents"
-                )
             
             # Initialize Strands agent
             self.logger.info(f"Initializing Strands agent with model: {self.model_id}")
