@@ -14,8 +14,20 @@ import logging
 from concurrent.futures import TimeoutError as ConcurrentTimeoutError
 
 from strands import Agent, tool
-from strands.multiagent import Swarm, GraphBuilder
-from strands_tools import journal
+
+# Try to import multiagent classes
+try:
+    from strands.multiagent import Swarm, GraphBuilder
+    MULTIAGENT_AVAILABLE = True
+except ImportError:
+    MULTIAGENT_AVAILABLE = False
+    Swarm = None
+    GraphBuilder = None
+
+try:
+    from strands_tools import journal
+except ImportError:
+    journal = None
 
 from ..models.data_models import (
     ProductInput,
@@ -48,6 +60,9 @@ class StrandsMultiAgentOrchestrator(Agent):
     Showcases strands.multiagent tools including agent_graph, swarm, and workflow
     to coordinate specialized NER, RAG, LLM, and Hybrid agents for brand extraction.
     """
+    
+    # Class-level constants
+    MULTIAGENT_AVAILABLE = MULTIAGENT_AVAILABLE
     
     def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
         """
@@ -194,6 +209,43 @@ class StrandsMultiAgentOrchestrator(Agent):
         return agent_id
     
     @tool
+    def create_finetuned_nova_agent(self, config: Optional[Dict[str, Any]] = None) -> str:
+        """
+        Create a specialized Fine-tuned Nova LLM agent.
+        
+        Args:
+            config: Optional configuration for the Fine-tuned Nova agent
+            
+        Returns:
+            Agent ID for the created Fine-tuned Nova agent
+        """
+        agent_id = f"finetuned_nova_agent_{uuid.uuid4().hex[:8]}"
+        
+        finetuned_nova_agent = Agent(
+            model="arn:aws:bedrock:us-east-1:654654616949:custom-model/amazon.nova-pro-v1:0:300k/e4oo8js4bjz5",
+            name=f"FinetunedNova_Agent_{agent_id}",  # Ensure unique name for Swarm
+            system_prompt="""You are a specialized fine-tuned Nova model optimized specifically for brand extraction from product titles.
+
+Your training has specialized you for:
+- Accurate brand identification across multiple languages (English, Thai, mixed)
+- Handling e-commerce product naming conventions
+- Distinguishing brands from product models, categories, and descriptions
+- Recognizing transliterations and brand variations
+
+Instructions:
+- Extract ONLY the brand name from the product title
+- Return "Unknown" if no clear brand is identifiable
+- Use standard brand formatting (e.g., "Samsung" not "samsung")
+- For mixed-language titles, prioritize the internationally recognized brand name
+
+Respond with only the brand name, no additional text or explanation."""
+        )
+        
+        self.specialized_agents[agent_id] = finetuned_nova_agent
+        self.logger.info(f"Created Fine-tuned Nova agent: {agent_id}")
+        return agent_id
+    
+    @tool
     def create_hybrid_agent(self, config: Optional[Dict[str, Any]] = None) -> str:
         """
         Create a specialized Hybrid agent that combines multiple approaches.
@@ -225,12 +277,12 @@ class StrandsMultiAgentOrchestrator(Agent):
         self.logger.info(f"Created Hybrid agent: {agent_id}")
         return agent_id
     
-    def _coordinate_inference_internal(self, product_name: str, coordination_method: str = "swarm") -> Dict[str, Any]:
+    async def _coordinate_inference_internal(self, product_name: str, coordination_method: str = "swarm") -> Dict[str, Any]:
         """Internal method for coordinate_inference without @tool decorator."""
-        return self._coordinate_inference_logic(product_name, coordination_method)
+        return await self._coordinate_inference_logic(product_name, coordination_method)
     
     @tool
-    def coordinate_inference(self, product_name: str, coordination_method: str = "swarm") -> Dict[str, Any]:
+    async def coordinate_inference(self, product_name: str, coordination_method: str = "swarm") -> Dict[str, Any]:
         """
         Coordinate inference across multiple specialized agents using Strands multiagent classes.
         
@@ -241,9 +293,9 @@ class StrandsMultiAgentOrchestrator(Agent):
         Returns:
             Coordinated inference results
         """
-        return self._coordinate_inference_logic(product_name, coordination_method)
+        return await self._coordinate_inference_logic(product_name, coordination_method)
     
-    def _coordinate_inference_logic(self, product_name: str, coordination_method: str = "swarm") -> Dict[str, Any]:
+    async def _coordinate_inference_logic(self, product_name: str, coordination_method: str = "swarm") -> Dict[str, Any]:
         """Core coordination logic shared between tool and internal methods."""
         self.logger.info(f"Coordinating inference for '{product_name}' using {coordination_method}")
         
@@ -260,7 +312,7 @@ class StrandsMultiAgentOrchestrator(Agent):
             return self._coordinate_with_workflow(product_name)
         else:
             # Use enhanced coordination for unknown methods
-            return self._coordinate_with_enhanced_coordination(product_name, coordination_method)
+            return await self._coordinate_with_enhanced_coordination(product_name, coordination_method)
     
     def _coordinate_with_swarm(self, product_name: str) -> Dict[str, Any]:
         """Coordinate using Strands Swarm class for parallel agent execution."""
@@ -415,15 +467,35 @@ Brand name:"""
             self.logger.error(f"Workflow coordination failed: {e}")
             raise AgentError(self.agent_name, f"Workflow coordination failed: {str(e)}")
     
-    def _coordinate_with_enhanced_coordination(self, product_name: str, coordination_method: str) -> Dict[str, Any]:
-        """Enhanced coordination that uses Strands agents directly."""
+    async def _coordinate_with_enhanced_coordination(self, product_name: str, coordination_method: str) -> Dict[str, Any]:
+        """Enhanced coordination that prioritizes fine-tuned Nova agent and uses Strands agents directly."""
         self.logger.info(f"Using enhanced coordination for {coordination_method}")
         
         results = {}
+        
+        # Process specialized agents (Strands multiagent) - prioritize fine-tuned Nova
+        specialized_agent_order = []
+        finetuned_agents = []
+        other_agents = []
+        
         for agent_id, agent in self.specialized_agents.items():
+            if "finetuned_nova" in agent_id.lower():
+                finetuned_agents.append((agent_id, agent))
+            else:
+                other_agents.append((agent_id, agent))
+        
+        # Process fine-tuned agents first, then others
+        specialized_agent_order = finetuned_agents + other_agents
+        
+        for agent_id, agent in specialized_agent_order:
             try:
-                # Create a more detailed prompt for brand extraction
-                prompt = f"""Analyze this product name and extract the brand name: "{product_name}"
+                # Use different prompts for fine-tuned vs regular agents
+                if "finetuned_nova" in agent_id.lower():
+                    # Simplified prompt for fine-tuned model
+                    prompt = f'Product title: "{product_name}"\n\nBrand name:'
+                else:
+                    # More detailed prompt for regular agents
+                    prompt = f"""Analyze this product name and extract the brand name: "{product_name}"
 
 Product analysis:
 - Look for brand names at the beginning of the product name
@@ -444,16 +516,83 @@ Brand name:"""
                 
                 confidence = self._calculate_response_confidence(agent_response, predicted_brand)
                 
+                # Boost confidence for fine-tuned models
+                if "finetuned_nova" in agent_id.lower() and predicted_brand != "Unknown":
+                    confidence = min(1.0, confidence + 0.1)  # Boost fine-tuned model confidence
+                
                 results[agent_id] = {
                     "prediction": predicted_brand,
                     "confidence": confidence,
-                    "method": agent_id.split('_')[0],
-                    "response": str(agent_response)[:200] + "..." if len(str(agent_response)) > 200 else str(agent_response)
+                    "method": agent_id.split('_')[0] if "_" in agent_id else agent_id,
+                    "response": str(agent_response)[:200] + "..." if len(str(agent_response)) > 200 else str(agent_response),
+                    "success": True
                 }
+                
+                self.logger.info(f"Agent {agent_id} prediction: {predicted_brand} (confidence: {confidence:.3f})")
                 
             except Exception as e:
                 self.logger.error(f"Agent {agent_id} failed: {e}")
-                results[agent_id] = {"error": str(e)}
+                results[agent_id] = {"error": str(e), "success": False}
+        
+        # Process registry agents only if no successful specialized agents or for comparison
+        successful_specialized = any(r.get("success") and r.get("prediction") != "Unknown" 
+                                   for r in results.values())
+        
+        if not successful_specialized or len(results) < 2:  # Include registry for comparison if needed
+            for agent_name, agent in self.agents.items():
+                # Skip if we already have enough good results from specialized agents
+                if successful_specialized and len([r for r in results.values() 
+                                                 if r.get("success") and r.get("prediction") != "Unknown"]) >= 3:
+                    break
+                    
+                try:
+                    # Create ProductInput for registry agents
+                    from ..models.data_models import ProductInput, LanguageHint
+                    product_input = ProductInput(
+                        product_name=product_name,
+                        language_hint=LanguageHint.AUTO
+                    )
+                    
+                    # Run agent processing asynchronously
+                    agent_result = await agent.process(product_input)
+                    
+                    if agent_result and agent_result.get("success"):
+                        result_data = agent_result.get("result")
+                        
+                        # Extract brand prediction based on agent type
+                        if hasattr(result_data, 'predicted_brand'):
+                            predicted_brand = result_data.predicted_brand
+                            confidence = result_data.confidence
+                        elif hasattr(result_data, 'entities') and result_data.entities:
+                            # NER result - extract best brand entity
+                            brand_entities = [e for e in result_data.entities if e.entity_type.value == "BRAND"]
+                            if brand_entities:
+                                best_entity = max(brand_entities, key=lambda x: x.confidence)
+                                predicted_brand = best_entity.text
+                                confidence = best_entity.confidence
+                            else:
+                                predicted_brand = "Unknown"
+                                confidence = 0.0
+                        else:
+                            predicted_brand = "Unknown"
+                            confidence = 0.0
+                        
+                        results[f"registry_{agent_name}"] = {
+                            "prediction": predicted_brand,
+                            "confidence": confidence,
+                            "method": agent_name,
+                            "response": f"Registry agent result: {predicted_brand}",
+                            "success": True
+                        }
+                    else:
+                        results[f"registry_{agent_name}"] = {
+                            "error": agent_result.get("error", "Unknown error") if agent_result else "No result",
+                            "success": False
+                        }
+                        
+                except Exception as e:
+                    self.logger.error(f"Registry agent {agent_name} failed: {e}")
+                    results[f"registry_{agent_name}"] = {"error": str(e), "success": False}
         
         return {
             "method": coordination_method,
@@ -634,6 +773,7 @@ Brand name:"""
         # Extract predictions and confidence scores
         predictions = []
         agent_details = {}
+        finetuned_predictions = []
         
         for agent_id, agent_result in results.items():
             if isinstance(agent_result, dict) and "error" not in agent_result:
@@ -642,9 +782,19 @@ Brand name:"""
                 method_type = agent_result.get("method", agent_id)
                 
                 if prediction != "Unknown" and confidence > 0:
-                    predictions.append((prediction, confidence, method_type))
+                    prediction_tuple = (prediction, confidence, method_type)
+                    predictions.append(prediction_tuple)
+                    
+                    # Separate fine-tuned Nova predictions for prioritization
+                    if "finetuned_nova" in agent_id.lower():
+                        finetuned_predictions.append(prediction_tuple)
+                        
                 elif prediction != "Unknown":  # Include non-Unknown predictions even with 0 confidence
-                    predictions.append((prediction, max(0.1, confidence), method_type))
+                    prediction_tuple = (prediction, max(0.1, confidence), method_type)
+                    predictions.append(prediction_tuple)
+                    
+                    if "finetuned_nova" in agent_id.lower():
+                        finetuned_predictions.append(prediction_tuple)
                 
                 agent_details[agent_id] = {
                     "prediction": prediction,
@@ -660,11 +810,17 @@ Brand name:"""
                     "success": False
                 }
         
-        # Determine best prediction
-        if predictions:
-            # Sort by confidence and select best
+        # Determine best prediction with fine-tuned Nova prioritization
+        if finetuned_predictions:
+            # Prioritize fine-tuned Nova predictions
+            best_prediction = max(finetuned_predictions, key=lambda x: x[1])
+            best_brand, best_confidence, best_method = best_prediction
+            self.logger.info(f"Using fine-tuned Nova prediction: {best_brand} (confidence: {best_confidence:.3f})")
+        elif predictions:
+            # Sort by confidence and select best from all predictions
             best_prediction = max(predictions, key=lambda x: x[1])
             best_brand, best_confidence, best_method = best_prediction
+            self.logger.info(f"Using best prediction: {best_brand} (confidence: {best_confidence:.3f}, method: {best_method})")
         else:
             # If no predictions found, try direct extraction as fallback
             fallback_brand = self._extract_brand_from_product_name(product_name)
@@ -684,16 +840,46 @@ Brand name:"""
             "all_predictions": predictions,
             "total_agents": len(results),
             "successful_agents": sum(1 for r in results.values() if isinstance(r, dict) and "error" not in r),
+            "finetuned_nova_used": len(finetuned_predictions) > 0,
             "timestamp": time.time()
         }
     
     def _create_default_agents(self) -> None:
-        """Create default set of specialized agents."""
+        """Create default set of specialized agents with fine-tuned Nova prioritized."""
+        # Create fine-tuned Nova agent first (highest priority)
+        self.create_finetuned_nova_agent()
+        
+        # Create other specialized agents
         self.create_ner_agent()
         self.create_rag_agent() 
         self.create_llm_agent()
         self.create_hybrid_agent()
+        
         self.logger.info(f"Created {len(self.specialized_agents)} default specialized agents")
+        
+        # Log which agents were created
+        for agent_id in self.specialized_agents.keys():
+            if "finetuned_nova" in agent_id.lower():
+                self.logger.info(f"✅ Fine-tuned Nova agent created: {agent_id}")
+            else:
+                self.logger.info(f"📝 Specialized agent created: {agent_id}")
+    
+    async def _integrate_registry_agents(self) -> None:
+        """Integrate with registry agents for compatibility."""
+        try:
+            # Get registry agents
+            registry_agents = await initialize_default_agents()
+            
+            # Add registry agents to legacy agents dict for compatibility
+            for agent_name, agent in registry_agents.items():
+                self.agents[agent_name] = agent
+                self.logger.info(f"Integrated registry agent: {agent_name}")
+            
+            self.logger.info(f"Integrated {len(registry_agents)} registry agents")
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to integrate registry agents: {str(e)}")
+            # Don't fail initialization if registry integration fails
     
     async def orchestrate_multiagent_inference(
         self, 
@@ -716,7 +902,7 @@ Brand name:"""
             self.logger.info(f"Starting multiagent inference for: {product_name}")
             
             # Step 1: Coordinate inference using selected method (call internal method directly)
-            coordination_results = self._coordinate_inference_internal(product_name, coordination_method)
+            coordination_results = await self._coordinate_inference_internal(product_name, coordination_method)
             
             # Step 2: Aggregate results from all agents (call internal method directly)
             final_results = self._aggregate_results_internal(coordination_results)
@@ -727,7 +913,7 @@ Brand name:"""
                 "orchestrator_type": "strands_multiagent",
                 "coordination_method": coordination_method,
                 "specialized_agents": list(self.specialized_agents.keys()),
-                "strands_multiagent_classes": ["Swarm", "GraphBuilder"] if MULTIAGENT_AVAILABLE else [],
+                "strands_multiagent_classes": ["Swarm", "GraphBuilder"] if self.MULTIAGENT_AVAILABLE else [],
                 "strands_tools_used": ["journal"] if journal else []
             })
             
@@ -770,7 +956,7 @@ Brand name:"""
             
         except Exception as e:
             self.logger.error(f"Orchestrator initialization failed: {e}")
-            raise AgentInitializationError(f"Could not initialize orchestrator: {e}")
+            raise AgentInitializationError("orchestrator", f"Could not initialize orchestrator: {e}")
     
     async def cleanup(self) -> None:
         """
@@ -814,8 +1000,8 @@ Brand name:"""
                 for agent_id in self.specialized_agents.keys()
             },
             "multiagent_classes": {
-                "Swarm": MULTIAGENT_AVAILABLE,
-                "GraphBuilder": MULTIAGENT_AVAILABLE,
+                "Swarm": self.MULTIAGENT_AVAILABLE,
+                "GraphBuilder": self.MULTIAGENT_AVAILABLE,
                 "journal_tool": journal is not None
             },
             "coordination_methods": ["swarm", "graph", "workflow"],
@@ -853,7 +1039,13 @@ Brand name:"""
         Returns:
             Dictionary containing complete multiagent inference results
         """
-        result = await self.orchestrate_multiagent_inference(input_data.product_name)
+        # Ensure specialized agents are created
+        if not self.specialized_agents:
+            self._create_default_agents()
+            
+        # Use specialized agents coordination method for better fine-tuned Nova integration
+        coordination_method = "enhanced" if self.specialized_agents else "swarm"
+        result = await self.orchestrate_multiagent_inference(input_data.product_name, coordination_method)
         
         # Convert to expected format for server response
         return {
@@ -900,7 +1092,13 @@ class StrandsOrchestratorAgent(StrandsMultiAgentOrchestrator):
     async def initialize(self) -> None:
         """Initialize orchestrator (compatibility method)."""
         self._create_default_agents()
+        
+        # Also integrate with registry agents for compatibility, but prioritize specialized agents
+        await self._integrate_registry_agents()
+        
         self.logger.info("Strands multiagent orchestrator initialized (compatibility mode)")
+        self.logger.info(f"Specialized agents: {list(self.specialized_agents.keys())}")
+        self.logger.info(f"Registry agents: {list(self.agents.keys())}")
     
     async def get_agent_health(self) -> Dict[str, Any]:
         """Get health status (compatibility method)."""
@@ -1000,7 +1198,7 @@ def create_orchestrator_agent(config: Optional[Dict[str, Any]] = None) -> Strand
         
     except Exception as e:
         logging.getLogger(__name__).error(f"Failed to create orchestrator agent: {e}")
-        raise AgentInitializationError(f"Could not create orchestrator: {e}")
+        raise AgentInitializationError("orchestrator", f"Could not create orchestrator: {e}")
 
 
 # Export the main classes and functions

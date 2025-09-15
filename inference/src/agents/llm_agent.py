@@ -629,6 +629,206 @@ class EnhancedStrandsLLMAgent(StrandsLLMAgent):
         return min(1.0, enhanced_confidence)
 
 
+class FinetunedNovaLLMAgent(StrandsLLMAgent):
+    """
+    Fine-tuned Nova LLM agent for specialized brand extraction.
+    
+    Uses a fine-tuned Amazon Nova Pro model specifically trained for brand extraction
+    tasks, providing improved accuracy for product name analysis.
+    """
+    
+    def __init__(self, config: Dict[str, Any]) -> None:
+        """
+        Initialize fine-tuned Nova LLM agent.
+        
+        Args:
+            config: Configuration dictionary containing model and inference settings
+        """
+        # Set default fine-tuned model ID
+        if "model_id" not in config:
+            config["model_id"] = "arn:aws:bedrock:us-east-1:654654616949:custom-model/amazon.nova-pro-v1:0:300k/e4oo8js4bjz5"
+        
+        super().__init__(config)
+        self.agent_name = "finetuned_nova_llm"
+        
+        # Fine-tuned model specific configuration
+        self.is_finetuned = True
+        self.training_domain = "brand_extraction"
+        
+        # Adjust parameters for fine-tuned model
+        self.temperature = self.get_config_value("temperature", 0.05)  # Lower temperature for more focused responses
+        self.confidence_threshold = self.get_config_value("confidence_threshold", 0.6)  # Higher threshold due to specialization
+    
+    def _get_finetuned_system_prompt(self) -> str:
+        """
+        Get specialized system prompt for fine-tuned Nova model.
+        
+        Returns:
+            Optimized system prompt for fine-tuned brand extraction
+        """
+        return """You are a specialized brand extraction model fine-tuned specifically for identifying brand names from product titles.
+
+Your training has optimized you for:
+- Accurate brand identification across multiple languages (English, Thai, mixed)
+- Handling e-commerce product naming conventions
+- Distinguishing brands from product models, categories, and descriptions
+- Recognizing transliterations and brand variations
+
+Instructions:
+- Extract ONLY the brand name from the product title
+- Return "Unknown" if no clear brand is identifiable
+- Use standard brand formatting (e.g., "Samsung" not "samsung")
+- For mixed-language titles, prioritize the internationally recognized brand name
+
+Respond with only the brand name, no additional text or explanation."""
+    
+    async def initialize(self) -> None:
+        """Initialize fine-tuned Nova agent with specialized configuration."""
+        try:
+            self.logger.info(f"Initializing fine-tuned Nova agent with model: {self.model_id}")
+            
+            # Create specialized system prompt for fine-tuned model
+            system_prompt = self._get_finetuned_system_prompt()
+            
+            self.strands_agent = Agent(
+                model=self.model_id,
+                system_prompt=system_prompt,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+                top_p=self.top_p
+            )
+            
+            # Validate agent access
+            await self._validate_agent_access()
+            
+            self.set_initialized(True)
+            self.logger.info("Fine-tuned Nova LLM agent initialized successfully")
+            
+        except Exception as e:
+            self.set_initialized(False)
+            raise AgentInitializationError(
+                self.agent_name,
+                f"Failed to initialize fine-tuned Nova LLM agent: {str(e)}",
+                e
+            )
+    
+    def _get_finetuned_prompt_template(self) -> str:
+        """
+        Get optimized prompt template for fine-tuned model.
+        
+        Returns:
+            Simplified prompt template optimized for fine-tuned model
+        """
+        return """Product title: "{product_name}"
+
+Brand name:"""
+    
+    def _build_prompt(self, product_name: str, context: Optional[str] = None) -> str:
+        """
+        Build optimized prompt for fine-tuned model.
+        
+        Args:
+            product_name: Cleaned product name
+            context: Optional additional context
+            
+        Returns:
+            Optimized prompt string for fine-tuned model
+        """
+        # Use simplified prompt template for fine-tuned model
+        prompt = self._get_finetuned_prompt_template().format(product_name=product_name)
+        
+        # Add context if provided (but keep it minimal for fine-tuned model)
+        if context:
+            context_section = f"Context: {context[:100]}...\n\n" if len(context) > 100 else f"Context: {context}\n\n"
+            prompt = context_section + prompt
+        
+        return prompt
+    
+    def _calculate_confidence(self, predicted_brand: str, reasoning: str, original_text: str) -> float:
+        """
+        Calculate confidence score optimized for fine-tuned model.
+        
+        Args:
+            predicted_brand: Predicted brand name
+            reasoning: LLM reasoning text
+            original_text: Original product name
+            
+        Returns:
+            Confidence score between 0.0 and 1.0
+        """
+        if predicted_brand == "Unknown":
+            return 0.0
+        
+        # Start with higher base confidence for fine-tuned model
+        confidence = 0.7
+        
+        # Brand name quality factors (more weight for fine-tuned model)
+        if len(predicted_brand) >= 3:
+            confidence += 0.15
+        
+        if predicted_brand[0].isupper():
+            confidence += 0.1
+        
+        # Text matching factors (higher weight due to specialization)
+        if predicted_brand.lower() in original_text.lower():
+            confidence += 0.15
+        
+        # Fine-tuned model specific adjustments
+        # Check for clean, single-word brand responses (indicates good training)
+        if len(predicted_brand.split()) == 1 and predicted_brand.isalpha():
+            confidence += 0.05
+        
+        # Penalize responses that look like they contain extra information
+        if any(word in reasoning.lower() for word in ["because", "since", "the brand", "appears to be"]):
+            confidence -= 0.1  # Fine-tuned model should give cleaner responses
+        
+        return min(1.0, max(0.0, confidence))
+    
+    async def _validate_agent_access(self) -> None:
+        """Validate fine-tuned Nova agent access with specialized test."""
+        try:
+            # Test with a brand extraction specific prompt
+            test_prompt = 'Product title: "Samsung Galaxy S23 Ultra"\n\nBrand name:'
+            test_response = self.strands_agent(test_prompt)
+            
+            if not test_response:
+                raise AgentInitializationError(
+                    self.agent_name,
+                    "Fine-tuned agent returned empty response during validation"
+                )
+            
+            # Check if response looks like expected fine-tuned output
+            response_clean = str(test_response).strip().lower()
+            if "samsung" not in response_clean:
+                self.logger.warning("Fine-tuned model validation: unexpected response format")
+            
+            self.logger.info(f"Successfully validated fine-tuned Nova model access: {self.model_id}")
+            
+        except Exception as e:
+            raise AgentInitializationError(
+                self.agent_name,
+                f"Failed to validate fine-tuned Nova agent access: {str(e)}"
+            )
+    
+    async def _perform_health_check(self) -> None:
+        """Perform fine-tuned model specific health check."""
+        await super()._perform_health_check()
+        
+        # Additional health check for fine-tuned model
+        try:
+            # Test with a challenging multilingual example
+            test_result = await self.infer_brand("Samsung Galaxy โทรศัพท์มือถือ")
+            if not isinstance(test_result, LLMResult):
+                raise RuntimeError("Fine-tuned model health check inference failed")
+            
+            # Verify the fine-tuned model performs well on multilingual content
+            if test_result.predicted_brand == "Unknown":
+                self.logger.warning("Fine-tuned model may have issues with multilingual content")
+            
+        except Exception as e:
+            raise RuntimeError(f"Fine-tuned model health check failed: {e}")
+
+
 # Backward compatibility aliases
 BedrockLLMAgent = StrandsLLMAgent
 EnhancedBedrockLLMAgent = EnhancedStrandsLLMAgent

@@ -14,7 +14,7 @@ from ..config.settings import get_config
 from .base_agent import BaseAgent, NERAgent, RAGAgent, LLMAgent, HybridAgent
 from .ner_agent import SpacyNERAgent, MultilingualNERAgent
 from .rag_agent import SentenceTransformerRAGAgent, EnhancedRAGAgent
-from .llm_agent import BedrockLLMAgent, EnhancedBedrockLLMAgent
+from .llm_agent import BedrockLLMAgent, EnhancedBedrockLLMAgent, FinetunedNovaLLMAgent
 from .hybrid_agent import SequentialHybridAgent, OptimizedHybridAgent
 from .simple_agent import SimpleInferenceAgent
 # Note: StrandsOrchestratorAgent import removed to avoid circular dependency
@@ -87,6 +87,22 @@ class AgentRegistry:
             "enable_reasoning_analysis": True
         }
         
+        # Fine-tuned Nova LLM Agent Configuration
+        self.agent_configs["finetuned_nova_llm"] = {
+            "aws_profile": self.system_config.aws.profile_name,
+            "aws_region": self.system_config.aws.region,
+            "model_id": "arn:aws:bedrock:us-east-1:654654616949:custom-model/amazon.nova-pro-v1:0:300k/e4oo8js4bjz5",
+            "max_tokens": 500,  # Shorter responses expected from fine-tuned model
+            "temperature": 0.05,  # Lower temperature for more focused responses
+            "top_p": 0.9,
+            "confidence_threshold": 0.6,  # Higher threshold due to specialization
+            "max_text_length": 1000,
+            "timeout_seconds": 30,
+            "use_context_enhancement": False,  # Fine-tuned model may not need context enhancement
+            "context_weight": 0.2,
+            "enable_reasoning_analysis": False  # Fine-tuned model should give direct responses
+        }
+        
         # Hybrid Agent Configuration
         self.agent_configs["hybrid"] = {
             "enable_ner_stage": True,
@@ -130,6 +146,9 @@ class AgentRegistry:
             
             # Register LLM agent
             await self._register_llm_agent()
+            
+            # Register Fine-tuned Nova LLM agent
+            await self._register_finetuned_nova_agent()
             
             # Register Hybrid agent
             await self._register_hybrid_agent()
@@ -239,6 +258,30 @@ class AgentRegistry:
         except Exception as e:
             logger.warning(f"Failed to register any LLM agent: {str(e)}")
             # Don't raise exception - system can work without LLM
+    
+    async def _register_finetuned_nova_agent(self) -> None:
+        """Register and initialize Fine-tuned Nova LLM agent."""
+        try:
+            logger.info("Registering Fine-tuned Nova LLM agent...")
+            
+            # Try to create fine-tuned Nova LLM agent
+            try:
+                finetuned_agent = FinetunedNovaLLMAgent(self.agent_configs["finetuned_nova_llm"])
+                await finetuned_agent.initialize()
+                self.registered_agents["finetuned_nova_llm"] = finetuned_agent
+                logger.info("✅ Fine-tuned Nova LLM agent registered successfully")
+                return
+            except Exception as e:
+                logger.warning(f"❌ Failed to initialize fine-tuned Nova LLM agent: {str(e)}")
+                logger.warning(f"   Error type: {type(e).__name__}")
+                logger.warning("   This may be due to:")
+                logger.warning("   - Fine-tuned model ARN not accessible")
+                logger.warning("   - AWS credentials insufficient for custom model access")
+                logger.warning("   - Model not available in the specified region")
+            
+        except Exception as e:
+            logger.warning(f"Failed to register fine-tuned Nova LLM agent: {str(e)}")
+            # Don't raise exception - system can work without fine-tuned model
     
     async def _register_hybrid_agent(self) -> None:
         """Register and initialize Hybrid agent."""
@@ -364,6 +407,8 @@ class AgentRegistry:
                 await self._register_rag_agent()
             elif agent_name == "llm":
                 await self._register_llm_agent()
+            elif agent_name == "finetuned_nova_llm":
+                await self._register_finetuned_nova_agent()
             elif agent_name == "hybrid":
                 await self._register_hybrid_agent()
             elif agent_name == "simple":

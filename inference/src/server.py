@@ -116,7 +116,8 @@ class InferenceHandler(BaseHTTPRequestHandler):
                 "rag": "Vector similarity search using sentence transformers",
                 "hybrid": "Sequential pipeline combining NER, RAG, and LLM",
                 "ner": "Named entity recognition for brand extraction",
-                "llm": "Large language model inference"
+                "llm": "Large language model inference",
+                "finetuned_nova_llm": "Fine-tuned Nova model specialized for brand extraction"
             },
             "request_format": {
                 "product_name": "string (required)",
@@ -158,7 +159,7 @@ class InferenceHandler(BaseHTTPRequestHandler):
                 lang_hint = LanguageHint.AUTO
             
             # Validate method parameter
-            valid_methods = ['orchestrator', 'simple', 'rag', 'hybrid', 'ner', 'llm']
+            valid_methods = ['orchestrator', 'simple', 'rag', 'hybrid', 'ner', 'llm', 'finetuned_nova_llm']
             if method not in valid_methods:
                 self._send_error(400, f"Invalid method '{method}'. Valid methods: {', '.join(valid_methods)}")
                 return
@@ -352,8 +353,8 @@ class InferenceHandler(BaseHTTPRequestHandler):
                         },
                         "processing_time_ms": int(result_data.processing_time * 1000)
                     })
-                elif method in ["ner", "llm"]:
-                    # Handle NER and LLM agents
+                elif method in ["ner", "llm", "finetuned_nova_llm"]:
+                    # Handle NER, LLM, and Fine-tuned Nova agents
                     if hasattr(result_data, 'predicted_brand'):
                         brand = result_data.predicted_brand
                         confidence = result_data.confidence
@@ -390,8 +391,13 @@ class InferenceHandler(BaseHTTPRequestHandler):
                                 "end": e.end_pos
                             } for e in result_data.entities
                         ]
-                    elif method == "llm" and hasattr(result_data, 'reasoning'):
+                    elif method in ["llm", "finetuned_nova_llm"] and hasattr(result_data, 'reasoning'):
                         response["reasoning"] = result_data.reasoning
+                        
+                    # Add special metadata for fine-tuned Nova
+                    if method == "finetuned_nova_llm":
+                        response["model_type"] = "fine_tuned_nova"
+                        response["specialization"] = "brand_extraction"
                 
                 return response
             else:
@@ -466,6 +472,14 @@ async def initialize_server() -> Tuple[Optional[Any], Optional[Dict[str, Any]]]:
         try:
             individual_agents = await initialize_default_agents()
             logger.info(f"Individual agents initialized: {list(individual_agents.keys())}")
+            
+            # Log which agents are available
+            for agent_name in individual_agents.keys():
+                if "finetuned" in agent_name.lower():
+                    logger.info(f"✅ Fine-tuned agent available: {agent_name}")
+                else:
+                    logger.info(f"📝 Agent available: {agent_name}")
+                    
         except Exception as e:
             logger.warning(f"Could not initialize individual agents: {str(e)}")
         
