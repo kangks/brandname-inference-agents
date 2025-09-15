@@ -1,140 +1,174 @@
-# Inference System
+# Multilingual Product Inference System
 
-This directory contains all inference-related code, infrastructure, documentation, and tests for the multilingual product inference system.
+A sophisticated AI-powered system for extracting brand names from multilingual product descriptions using advanced multi-agent coordination.
 
-## Directory Structure
+## 🚀 Quick Start
+
+### Option 1: One-Command Deployment
+```bash
+./infrastructure/scripts/deploy-monolithic.sh
+```
+
+### Option 2: Step-by-Step Deployment
+```bash
+./infrastructure/scripts/step1_deploy-cloudformation.sh  # Deploy AWS infrastructure
+./infrastructure/scripts/step2_build-and-push-images.sh  # Build and push Docker image
+./infrastructure/scripts/step3_deploy-ecs.sh            # Deploy ECS service
+```
+
+### Local Development
+```bash
+pip install -r requirements.txt
+python -m inference.server
+```
+
+## 🏗️ Architecture
+
+**Current Deployment**: Monolithic architecture with all agents in a single container
+
+```
+┌─────────────────────────────────────────┐
+│           ECS Container                 │
+│  ┌─────────────────────────────────┐   │
+│  │        HTTP Server              │   │ ← API Requests
+│  │         (server.py)             │   │
+│  └─────────────────────────────────┘   │
+│  ┌─────────────────────────────────┐   │
+│  │      Orchestrator Agent         │   │ ← Coordinates all agents
+│  │  ┌─────┐ ┌─────┐ ┌─────┐ ┌────┐ │   │
+│  │  │ NER │ │ RAG │ │ LLM │ │Hyb.│ │   │ ← All agents in same memory
+│  │  └─────┘ └─────┘ └─────┘ └────┘ │   │
+│  │  ┌─────┐                       │   │
+│  │  │Simp.│                       │   │
+│  │  └─────┘                       │   │
+│  └─────────────────────────────────┘   │
+└─────────────────────────────────────────┘
+```
+
+## 🎯 API Usage
+
+### Single Endpoint, Multiple Methods
+
+```bash
+# Base URL (replace with your ALB DNS)
+BASE_URL="http://your-alb-dns.us-east-1.elb.amazonaws.com"
+
+# Orchestrator (coordinates all agents) - Recommended
+curl -X POST "$BASE_URL/infer" \
+  -H "Content-Type: application/json" \
+  -d '{"product_name": "Samsung Galaxy S24", "method": "orchestrator"}'
+
+# Individual agents
+curl -X POST "$BASE_URL/infer" \
+  -d '{"product_name": "Samsung Galaxy S24", "method": "ner"}'     # Named Entity Recognition
+curl -X POST "$BASE_URL/infer" \
+  -d '{"product_name": "Samsung Galaxy S24", "method": "rag"}'     # Vector similarity search
+curl -X POST "$BASE_URL/infer" \
+  -d '{"product_name": "Samsung Galaxy S24", "method": "llm"}'     # Large Language Model
+curl -X POST "$BASE_URL/infer" \
+  -d '{"product_name": "Samsung Galaxy S24", "method": "hybrid"}'  # Combined pipeline
+curl -X POST "$BASE_URL/infer" \
+  -d '{"product_name": "Samsung Galaxy S24", "method": "simple"}'  # Pattern matching
+```
+
+### Health Check
+```bash
+curl "$BASE_URL/health"  # Check system status
+curl "$BASE_URL/"        # Service information
+```
+
+## 🧠 Available Agents
+
+| Method | Description | Use Case | Response Time |
+|--------|-------------|----------|---------------|
+| `orchestrator` | Coordinates all agents, returns best result | **Production use** - highest accuracy | ~1500ms |
+| `simple` | Pattern-based matching | Fast responses, no dependencies | ~25ms |
+| `ner` | Named Entity Recognition | Extract entities from text | ~150ms |
+| `rag` | Vector similarity search | Similarity-based matching | ~300ms |
+| `llm` | Large Language Model reasoning | Complex reasoning tasks | ~1200ms |
+| `hybrid` | Sequential NER → RAG → LLM pipeline | Balanced accuracy and speed | ~900ms |
+
+## 📁 Project Structure
 
 ```
 inference/
-├── agents/                 # Agent implementations
-│   ├── base_agent.py      # Base agent class
-│   ├── orchestrator_agent.py  # Multi-agent orchestrator
-│   ├── simple_agent.py    # Pattern-based inference
-│   ├── ner_agent.py       # Named Entity Recognition
-│   ├── llm_agent.py       # Large Language Model
-│   ├── rag_agent.py       # Retrieval Augmented Generation
-│   ├── hybrid_agent.py    # Hybrid approach
-│   └── registry.py        # Agent registry
-├── config/                # Configuration management
-│   ├── settings.py        # Application settings
-│   ├── model_registry.py  # Model configurations
-│   └── validators.py      # Configuration validators
-├── models/                # Data models and schemas
-│   └── data_models.py     # Pydantic models
-├── monitoring/            # Monitoring and observability
-│   ├── health_checker.py  # Health check endpoints
-│   ├── logger.py          # Structured logging
-│   ├── diagnostics.py     # System diagnostics
-│   └── cloudwatch_integration.py  # AWS CloudWatch
-├── infrastructure/        # Infrastructure as Code
-│   ├── cloudformation/    # CloudFormation templates
-│   ├── docker/           # Docker configurations
-│   ├── ecs/              # ECS task definitions
-│   ├── milvus/           # Vector database setup
-│   ├── monitoring/       # Monitoring infrastructure
+├── src/                    # Source code
+│   ├── agents/            # All agent implementations
+│   ├── config/            # Configuration management
+│   ├── models/            # Data models and schemas
+│   └── monitoring/        # Health checks and monitoring
+├── infrastructure/        # AWS deployment
 │   ├── scripts/          # Deployment scripts
-│   └── storage/          # Storage configurations
+│   ├── ecs/              # ECS configurations
+│   └── cloudformation/   # Infrastructure templates
 ├── tests/                # Test suite
-│   ├── test_*.py         # Unit and integration tests
-│   ├── final_*.py        # End-to-end validation
-│   └── validate_*.py     # Deployment validation
-├── scripts/              # Utility scripts
-│   ├── deploy_*.sh       # Deployment scripts
-│   └── test_*.sh         # Testing scripts
-├── docs/                 # Documentation
-│   └── inference.md      # System documentation
-├── diagrams/             # Architecture diagrams
-│   └── *.png            # Generated diagrams
-├── demo_method_selection.py  # Method selection demo
-├── main.py              # Application entry point
-├── server.py            # FastAPI server
-├── requirements.txt     # Python dependencies
-└── README.md           # This file
+├── docs/                 # Detailed documentation
+├── Dockerfile            # Container definition
+└── README.md            # This file
 ```
 
-## Quick Start
+## 📚 Documentation
 
-1. **Install dependencies:**
-   ```bash
-   cd inference
-   pip install -r requirements.txt
-   ```
+### Quick References
+- **[API Usage Examples](docs/API_USAGE_GUIDE.md)** - Complete API reference with examples
+- **[Architecture FAQ](../INFERENCE_ARCHITECTURE_FAQ.md)** - Common questions answered
+- **[Deployment Guide](infrastructure/README.md)** - Infrastructure setup
 
-2. **Run the server:**
-   ```bash
-   python -m inference.server
-   ```
+### Detailed Guides
+- **[Architecture Deep Dive](docs/ARCHITECTURE_AND_DEPLOYMENT_GUIDE.md)** - Complete system architecture
+- **[Infrastructure Guide](infrastructure/README.md)** - AWS deployment details
 
-3. **Run tests:**
-   ```bash
-   python -m pytest tests/
-   ```
+## 🧪 Testing
 
-4. **Deploy to AWS:**
-   ```bash
-   ./scripts/deploy-orchestrator-simple.sh
-   ```
-
-## Key Components
-
-### Agents
-- **Orchestrator Agent**: Coordinates multiple inference methods
-- **Simple Agent**: Pattern-based brand name extraction
-- **NER Agent**: Named Entity Recognition using spaCy
-- **LLM Agent**: Large Language Model inference
-- **RAG Agent**: Retrieval Augmented Generation
-- **Hybrid Agent**: Combines multiple approaches
-
-### Infrastructure
-- **ECS Fargate**: Containerized deployment
-- **Milvus**: Vector database for embeddings
-- **CloudWatch**: Monitoring and logging
-- **Application Load Balancer**: Traffic distribution
-
-### API Endpoints
-- `POST /infer` - Main inference endpoint
-- `GET /health` - Health check
-- `GET /methods` - Available inference methods
-- `GET /agents` - Active agents status
-
-## Configuration
-
-Environment variables are managed through the `config/settings.py` module. Key settings include:
-
-- `INFERENCE_ENV`: Environment (local/dev/prod)
-- `LOG_LEVEL`: Logging verbosity
-- `USE_MOCK_SERVICES`: Enable mock services for testing
-- `AWS_REGION`: AWS region for services
-
-## Testing
-
-The test suite includes:
-- Unit tests for individual components
-- Integration tests for agent coordination
-- End-to-end validation scripts
-- Performance benchmarks
-
-Run specific test categories:
 ```bash
-# Unit tests
-python -m pytest tests/test_*.py
+# Run all tests
+python -m pytest tests/
 
-# Integration tests
+# Test specific components
 python -m pytest tests/test_orchestrator_*.py
 
-# Validation tests
+# End-to-end validation
 python tests/final_validation.py
+
+# Test all API methods
+./scripts/test_brand_inference_endpoints.sh
 ```
 
-## Deployment
+## 🔧 Configuration
 
-See `infrastructure/README.md` for detailed deployment instructions.
-
-Quick deployment:
+Key environment variables:
 ```bash
-# Deploy to ECS
-./scripts/deploy-orchestrator-simple.sh
-
-# Validate deployment
-python tests/final_validation.py
+INFERENCE_ENV=production     # Environment
+LOG_LEVEL=INFO              # Logging level
+AWS_REGION=us-east-1        # AWS region
+USE_MOCK_SERVICES=false     # Enable mock services for testing
 ```
+
+## 🚨 Troubleshooting
+
+### Common Issues
+1. **Service won't start**: Check CloudWatch logs at `/ecs/multilingual-inference-orchestrator`
+2. **High latency**: Monitor CPU/memory usage, consider scaling
+3. **Agent failures**: Check individual agent logs and dependencies
+
+### Health Monitoring
+```bash
+# Check service status
+aws ecs describe-services --cluster multilingual-inference-cluster --services multilingual-inference-orchestrator
+
+# View logs
+aws logs tail /ecs/multilingual-inference-orchestrator --since 1h
+```
+
+## 🎯 Next Steps
+
+1. **Deploy**: Use `./infrastructure/scripts/deploy-monolithic.sh`
+2. **Test**: Try different methods with your product data
+3. **Monitor**: Check CloudWatch dashboards for performance
+4. **Scale**: Adjust auto-scaling policies based on usage
+
+## 📞 Support
+
+- Check [Architecture FAQ](../INFERENCE_ARCHITECTURE_FAQ.md) for common questions
+- Review CloudWatch logs for detailed error information
+- Consult [API Usage Guide](docs/API_USAGE_GUIDE.md) for implementation examples

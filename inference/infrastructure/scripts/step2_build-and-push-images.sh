@@ -61,18 +61,13 @@ echo "Logging in to ECR..."
 aws ecr get-login-password --profile $AWS_PROFILE --region $AWS_REGION | \
     docker login --username AWS --password-stdin $ECR_REGISTRY
 
-# Build and push all agent images using the main Dockerfile
-echo "Building and pushing agent images..."
+# Build and push orchestrator image (contains all agents)
+echo "Building and pushing orchestrator image..."
 build_and_push "orchestrator" "Dockerfile"
-build_and_push "ner" "Dockerfile"
-build_and_push "rag" "Dockerfile"
-build_and_push "llm" "Dockerfile"
-build_and_push "hybrid" "Dockerfile"
 
-echo "All images built and pushed successfully!"
-echo "Images available at:"
+echo "Orchestrator image built and pushed successfully!"
+echo "Image available at:"
 echo "  - $ECR_REGISTRY/multilingual-inference-orchestrator:latest"
-echo "  - $ECR_REGISTRY/multilingual-inference-ner:latest"
-echo "  - $ECR_REGISTRY/multilingual-inference-rag:latest"
-echo "  - $ECR_REGISTRY/multilingual-inference-llm:latest"
-echo "  - $ECR_REGISTRY/multilingual-inference-hybrid:latest"
+echo ""
+echo "Note: This single image contains all agents (NER, RAG, LLM, Hybrid, Simple)"
+echo "      and supports all inference methods via the 'method' parameter."

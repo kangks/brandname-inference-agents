@@ -207,8 +207,8 @@ else
     echo "Platform: $PLATFORM"
     echo ""
     echo "Next steps:"
-    echo "1. Build and push Docker images using: infrastructure/scripts/build-and-push-images.sh"
-    echo "2. Deploy ECS services using: infrastructure/scripts/deploy-ecs.sh"
-    echo "3. Setup Milvus storage using: infrastructure/scripts/setup-milvus-storage.sh"
-    echo "4. Deploy Milvus service using: infrastructure/scripts/deploy-milvus.sh"
+    echo "1. Build and push Docker images using: infrastructure/scripts/step2_build-and-push-images.sh"
+    echo "2. Deploy ECS services using: infrastructure/scripts/step3_deploy-ecs.sh"
+    echo "3. Setup Milvus storage using: infrastructure/scripts/step4_setup-milvus-storage.sh"
+    echo "4. Deploy Milvus service using: infrastructure/scripts/step5_deploy-milvus.sh"
 fi

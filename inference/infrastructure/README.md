@@ -1,348 +1,152 @@
-# Multilingual Product Inference Infrastructure
+# Infrastructure Deployment Guide
 
-This directory contains the complete AWS infrastructure setup for the multilingual product inference system using ARM64 ECS Fargate deployment.
+AWS infrastructure for the multilingual product inference system using ARM64 ECS Fargate.
 
-## Architecture Overview
+## Architecture
 
-The infrastructure is designed for ARM64 platform deployment on AWS using:
-- **ECS Fargate** for containerized agent deployment
-- **Application Load Balancer** for request routing and health checks
-- **Milvus on ECS** for vector database storage
-- **CloudWatch** for logging and monitoring
-- **EFS** for persistent storage
-- **S3** for model artifacts and training data
-- **API Gateway** for external API access
+**Monolithic Deployment**: Single ECS service containing all agents
+- **ECS Fargate**: ARM64 container with orchestrator + all agents
+- **Application Load Balancer**: Request routing and health checks  
+- **Milvus** (optional): Vector database for RAG agent
+- **CloudWatch**: Monitoring and logging
 
 ## Prerequisites
 
-- AWS CLI configured with `ml-sandbox` profile
+- AWS CLI configured with `ml-sandbox` profile (or update scripts)
 - Docker with ARM64 support
-- Python 3.13 in `.venv` virtual environment
-- Access to `us-east-1` region
+- Access to `us-east-1` region (or update scripts)
 
 ## Directory Structure
 
 ```
 infrastructure/
-├── cloudformation/          # CloudFormation templates
-│   ├── main-stack.yaml     # Main infrastructure stack
-│   ├── ecs-stack.yaml      # ECS cluster and services
-│   ├── alb-stack.yaml      # Load balancer and API Gateway
-│   ├── storage-stack.yaml  # EFS and S3 storage
-│   └── monitoring-stack.yaml # CloudWatch monitoring
-├── docker/                 # Dockerfiles for each agent
-│   ├── Dockerfile.orchestrator
-│   ├── Dockerfile.ner
-│   ├── Dockerfile.rag
-│   ├── Dockerfile.llm
-│   ├── Dockerfile.hybrid
-│   └── Dockerfile.milvus
-├── ecs/                    # ECS configurations
-│   ├── task-definitions/   # ECS task definitions
-│   ├── services/          # ECS service configurations
-│   └── autoscaling/       # Auto-scaling policies
-├── milvus/                # Milvus configuration
-│   └── milvus.yaml        # Milvus server configuration
-├── monitoring/            # Monitoring scripts
-│   └── milvus-health-check.py
 ├── scripts/               # Deployment scripts
-│   ├── deploy-cloudformation.sh
-│   ├── build-and-push-images.sh
-│   ├── deploy-ecs.sh
-│   ├── setup-milvus-storage.sh
-│   └── deploy-milvus.sh
-├── storage/               # Storage configurations
-│   └── efs-milvus.json
+│   ├── deploy-monolithic.sh             # 🚀 One-command deployment
+│   ├── step1_deploy-cloudformation.sh   # Deploy AWS infrastructure
+│   ├── step2_build-and-push-images.sh   # Build orchestrator image
+│   ├── step3_deploy-ecs.sh              # Deploy ECS service
+│   ├── step4_deploy-milvus.sh           # Deploy vector database (optional)
+│   └── step5_setup-milvus-storage.sh    # Setup EFS storage (optional)
+├── ecs/                   # ECS configurations
+│   ├── task-definitions/  # Task definitions
+│   └── services/         # Service configurations
+├── cloudformation/        # Infrastructure templates
+├── docker/               # Docker configurations
 └── README.md
 ```
 
-## Deployment Guide
+## Quick Deployment
 
-### Step 1: Deploy CloudFormation Infrastructure
-
-Deploy the complete AWS infrastructure stack:
-
+### Option 1: One-Command Deployment (Recommended)
 ```bash
-# Validate and deploy infrastructure (dry run first)
-./infrastructure/scripts/deploy-cloudformation.sh --dry-run
-
-# Deploy infrastructure
-./infrastructure/scripts/deploy-cloudformation.sh
+./scripts/deploy-monolithic.sh
 ```
 
-This creates:
-- VPC with public/private subnets
-- ECS cluster with ARM64 support
-- Application Load Balancer
-- Security groups and IAM roles
-- CloudWatch logging and monitoring
-- S3 buckets for storage
-
-### Step 2: Build and Push Docker Images
-
-Build ARM64 Docker images and push to ECR:
-
+### Option 2: Step-by-Step Deployment
 ```bash
-./infrastructure/scripts/build-and-push-images.sh
+./scripts/step1_deploy-cloudformation.sh  # Deploy AWS infrastructure
+./scripts/step2_build-and-push-images.sh  # Build and push orchestrator image
+./scripts/step3_deploy-ecs.sh            # Deploy ECS service
+
+# Optional: Deploy Milvus for RAG agent
+./scripts/step5_setup-milvus-storage.sh   # Setup EFS storage
+./scripts/step4_deploy-milvus.sh          # Deploy Milvus service
 ```
 
-This builds and pushes:
-- Orchestrator agent image
-- NER agent image
-- RAG agent image
-- LLM agent image
-- Hybrid agent image
+## What Gets Deployed
 
-### Step 3: Setup Milvus Storage
+### Core Infrastructure
+- **VPC**: Public/private subnets, security groups
+- **ECS Cluster**: ARM64 Fargate cluster
+- **Application Load Balancer**: Request routing
+- **CloudWatch**: Logging and monitoring
 
-Create EFS storage for Milvus persistence:
+### Main Service
+- **Orchestrator Service**: Single container with all agents
+  - NER, RAG, LLM, Hybrid, Simple agents
+  - Auto-scaling (2-10 instances)
+  - Health checks enabled
 
-```bash
-./infrastructure/scripts/setup-milvus-storage.sh
-```
-
-This creates:
-- EFS file system with encryption
-- Mount targets in private subnets
-- Access points for data and logs
-- Backup policies
-
-### Step 4: Deploy Milvus Vector Database
-
-Deploy Milvus on ECS with ARM64 platform:
-
-```bash
-./infrastructure/scripts/deploy-milvus.sh
-```
-
-This deploys:
-- Milvus standalone container
-- etcd for metadata storage
-- MinIO for object storage
-- Health monitoring
-
-### Step 5: Deploy Agent Services
-
-Deploy all inference agent services:
-
-```bash
-./infrastructure/scripts/deploy-ecs.sh
-```
-
-This creates:
-- ECS services for all agents
-- Auto-scaling policies
-- Service discovery
-- Load balancer target groups
+### Optional Components
+- **Milvus Service**: Vector database for RAG agent
+- **EFS Storage**: Persistent storage for Milvus
 
 ## Configuration
 
-### Environment Variables
-
-The system uses the following environment variables:
-
-```bash
-AWS_DEFAULT_REGION=us-east-1
-AWS_PROFILE=ml-sandbox
-MILVUS_HOST=milvus.multilingual-inference.local
-MILVUS_PORT=19530
-BEDROCK_MODEL_ID=amazon.nova-pro-v1:0
-LOG_LEVEL=INFO
-```
-
-### Auto-Scaling Configuration
-
-Auto-scaling is configured for all services:
-
-- **Orchestrator**: 2-10 instances, scales on CPU/Memory
-- **NER Agent**: 1-5 instances, scales on CPU
-- **RAG Agent**: 1-5 instances, scales on CPU
-- **LLM Agent**: 1-3 instances, scales on CPU (conservative)
-- **Hybrid Agent**: 1-4 instances, scales on CPU
-- **Milvus**: 1 instance (stateful service)
+### Key Settings
+- **AWS Profile**: `ml-sandbox` (update in scripts if different)
+- **AWS Region**: `us-east-1` (update in scripts if different)
+- **Platform**: ARM64 for cost optimization
+- **Auto-scaling**: 2-10 instances based on CPU/Memory
 
 ### Resource Allocation
-
-ARM64 ECS task resource allocation:
-
-| Service | CPU | Memory | Platform |
+| Service | CPU | Memory | Contains |
 |---------|-----|--------|----------|
-| Orchestrator | 1024 | 2048 MB | ARM64 |
-| NER Agent | 512 | 1024 MB | ARM64 |
-| RAG Agent | 512 | 1024 MB | ARM64 |
-| LLM Agent | 512 | 1024 MB | ARM64 |
-| Hybrid Agent | 1024 | 2048 MB | ARM64 |
-| Milvus | 2048 | 4096 MB | ARM64 |
+| Orchestrator | 1024 | 2048 MB | All agents (NER, RAG, LLM, Hybrid, Simple) |
+| Milvus (optional) | 2048 | 4096 MB | Vector database for RAG agent |
 
-## Monitoring and Logging
+## Monitoring
 
-### CloudWatch Dashboard
+### CloudWatch Logs
+- `/ecs/multilingual-inference-orchestrator` - All agent logs
+- `/ecs/multilingual-inference-milvus` - Vector database logs (if deployed)
 
-Access the monitoring dashboard:
-```
-https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=multilingual-inference-multilingual-inference
-```
-
-### Log Groups
-
-All services log to CloudWatch:
-- `/ecs/multilingual-inference-orchestrator`
-- `/ecs/multilingual-inference-ner`
-- `/ecs/multilingual-inference-rag`
-- `/ecs/multilingual-inference-llm`
-- `/ecs/multilingual-inference-hybrid`
-- `/ecs/multilingual-inference-milvus`
-
-### Health Monitoring
-
-Milvus health monitoring script:
+### Health Checks
 ```bash
-python infrastructure/monitoring/milvus-health-check.py
+# Get ALB DNS name
+aws elbv2 describe-load-balancers --query 'LoadBalancers[?contains(LoadBalancerName, `multilingual`)].DNSName' --output text
+
+# Test health endpoint
+curl http://<ALB-DNS>/health
 ```
 
-### Alerts
+## API Usage
 
-CloudWatch alarms monitor:
-- High CPU/Memory utilization
-- Milvus connection health
-- Load balancer response times
-- Error rates
+After deployment, use the ALB DNS name for API calls:
 
-## API Endpoints
+```bash
+# Get ALB DNS
+ALB_DNS=$(aws elbv2 describe-load-balancers --query 'LoadBalancers[?contains(LoadBalancerName, `multilingual`)].DNSName' --output text)
 
-### Application Load Balancer
-
-Direct access via ALB:
-```
-http://<alb-dns-name>/          # Orchestrator (default)
-http://<alb-dns-name>/ner/      # NER Agent
-http://<alb-dns-name>/rag/      # RAG Agent
-http://<alb-dns-name>/llm/      # LLM Agent
-http://<alb-dns-name>/hybrid/   # Hybrid Agent
+# Test API
+curl -X POST "http://$ALB_DNS/infer" \
+  -H "Content-Type: application/json" \
+  -d '{"product_name": "Samsung Galaxy S24", "method": "orchestrator"}'
 ```
 
-### API Gateway
-
-External API access:
-```
-https://<api-id>.execute-api.us-east-1.amazonaws.com/production/inference
-```
-
-### Service Discovery
-
-Internal service communication:
-```
-orchestrator.multilingual-inference.local:8080
-ner.multilingual-inference.local:8081
-rag.multilingual-inference.local:8082
-llm.multilingual-inference.local:8083
-hybrid.multilingual-inference.local:8084
-milvus.multilingual-inference.local:19530
-```
+Available methods: `orchestrator`, `ner`, `rag`, `llm`, `hybrid`, `simple`
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **ECS Task Startup Failures**
-   ```bash
-   # Check task logs
-   aws ecs describe-tasks --cluster multilingual-inference-cluster --tasks <task-arn>
-   
-   # Check CloudWatch logs
-   aws logs get-log-events --log-group-name /ecs/multilingual-inference-<service>
-   ```
-
-2. **Milvus Connection Issues**
-   ```bash
-   # Check Milvus health
-   curl http://milvus.multilingual-inference.local:9091/healthz
-   
-   # Run health monitoring
-   python infrastructure/monitoring/milvus-health-check.py
-   ```
-
-3. **Load Balancer Health Check Failures**
-   ```bash
-   # Check target group health
-   aws elbv2 describe-target-health --target-group-arn <target-group-arn>
-   ```
-
-### Debugging Commands
-
+**Service won't start:**
 ```bash
-# List ECS services
-aws ecs list-services --cluster multilingual-inference-cluster
-
 # Check service status
-aws ecs describe-services --cluster multilingual-inference-cluster --services <service-name>
+aws ecs describe-services --cluster multilingual-inference-cluster --services multilingual-inference-orchestrator
 
-# View CloudWatch metrics
-aws cloudwatch get-metric-statistics --namespace AWS/ECS --metric-name CPUUtilization
-
-# Check EFS mount targets
-aws efs describe-mount-targets --file-system-id <efs-id>
+# Check logs
+aws logs tail /ecs/multilingual-inference-orchestrator --since 1h
 ```
 
-## Security
+**API not responding:**
+```bash
+# Check target group health
+aws elbv2 describe-target-health --target-group-arn <target-group-arn>
 
-### IAM Roles
-
-- **ECS Task Execution Role**: ECR, CloudWatch Logs access
-- **ECS Task Role**: Bedrock, S3, EFS access
-- **Auto Scaling Role**: ECS service scaling permissions
-
-### Security Groups
-
-- **ALB Security Group**: HTTP/HTTPS from internet
-- **ECS Security Group**: Agent ports from ALB only
-- **EFS Security Group**: NFS from ECS tasks only
-
-### Encryption
-
-- **EFS**: Encrypted at rest and in transit
-- **S3**: Server-side encryption (AES-256)
-- **CloudWatch Logs**: Encrypted with AWS managed keys
+# Test health endpoint
+curl http://<ALB-DNS>/health
+```
 
 ## Cost Optimization
 
-### ARM64 Benefits
-
-- **30-40% cost savings** compared to x86_64
-- **Better price-performance ratio** for ML workloads
-- **Native ARM64 support** for Python and ML libraries
-
-### Auto-Scaling
-
-- **Fargate Spot**: 70% cost savings for non-critical workloads
-- **Scheduled Scaling**: Scale down during off-hours
-- **Target Tracking**: Efficient resource utilization
-
-### Storage Optimization
-
-- **S3 Lifecycle Policies**: Automatic transition to cheaper storage classes
-- **EFS Provisioned Throughput**: Pay only for required performance
-- **Log Retention**: 30-day retention to control costs
-
-## Maintenance
-
-### Regular Tasks
-
-1. **Update Docker Images**: Rebuild and deploy updated agent images
-2. **Monitor Costs**: Review AWS Cost Explorer monthly
-3. **Security Updates**: Update base images and dependencies
-4. **Performance Tuning**: Adjust auto-scaling policies based on usage
-
-### Backup and Recovery
-
-- **EFS Automatic Backups**: Enabled with 35-day retention
-- **S3 Versioning**: Enabled for model artifacts
-- **CloudFormation**: Infrastructure as code for disaster recovery
+- **ARM64 Platform**: 30-40% cost savings vs x86_64
+- **Auto-scaling**: Scales 2-10 instances based on demand
+- **Fargate**: Pay only for resources used
 
 ## Support
 
-For issues and questions:
-1. Check CloudWatch logs and metrics
-2. Review ECS service events
-3. Run health monitoring scripts
-4. Consult AWS documentation for service-specific issues
+For detailed information:
+- **[Main README](../README.md)** - Getting started guide
+- **[API Usage Guide](../docs/API_USAGE_GUIDE.md)** - Complete API reference
+- **[Architecture FAQ](../../INFERENCE_ARCHITECTURE_FAQ.md)** - Common questions
