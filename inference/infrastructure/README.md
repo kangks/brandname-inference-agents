@@ -41,6 +41,12 @@ infrastructure/
 ```bash
 ./scripts/deploy-monolithic.sh
 ```
+This script automatically:
+- Deploys infrastructure
+- Builds and pushes Docker image
+- Deploys ECS service
+- **Validates deployment with API tests**
+- Provides ready-to-use API endpoints
 
 ### Option 2: Step-by-Step Deployment
 ```bash
@@ -51,6 +57,11 @@ infrastructure/
 # Optional: Deploy Milvus for RAG agent
 ./scripts/step5_setup-milvus-storage.sh   # Setup EFS storage
 ./scripts/step4_deploy-milvus.sh          # Deploy Milvus service
+```
+
+### Option 3: Test Existing Deployment
+```bash
+./scripts/test-deployment.sh              # Test all inference methods
 ```
 
 ## What Gets Deployed
@@ -116,6 +127,16 @@ curl -X POST "http://$ALB_DNS/infer" \
 
 Available methods: `orchestrator`, `ner`, `rag`, `llm`, `hybrid`, `simple`
 
+## Cleanup Old Services
+
+If you previously deployed individual agent services, clean them up:
+
+```bash
+./scripts/cleanup-old-services.sh
+```
+
+This removes old NER, RAG, LLM, and Hybrid services, leaving only the orchestrator service.
+
 ## Troubleshooting
 
 ### Common Issues
@@ -136,6 +157,15 @@ aws elbv2 describe-target-health --target-group-arn <target-group-arn>
 
 # Test health endpoint
 curl http://<ALB-DNS>/health
+```
+
+**Multiple services running:**
+```bash
+# List all services
+aws ecs list-services --cluster multilingual-inference-cluster
+
+# Clean up old individual agent services
+./scripts/cleanup-old-services.sh
 ```
 
 ## Cost Optimization

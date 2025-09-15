@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Deploy ECS Fargate infrastructure for multilingual inference system
-# Uses ml-sandbox AWS profile and us-east-1 region with ARM64 platform
+# Deploy ECS Fargate orchestrator service (monolithic architecture)
+# Contains all agents in a single container for simplified deployment
 
 set -e
 
@@ -12,11 +12,15 @@ CLUSTER_NAME="multilingual-inference-cluster"
 USE_LOAD_BALANCER="${USE_LOAD_BALANCER:-false}"  # Set to true if ALB is deployed
 ACCOUNT_ID=$(aws sts get-caller-identity --profile $AWS_PROFILE --query Account --output text)
 
-echo "🚀 Deploying ECS infrastructure for multilingual inference system..."
+echo "🚀 Deploying ECS orchestrator service (monolithic architecture)..."
 echo "AWS Profile: $AWS_PROFILE"
 echo "AWS Region: $AWS_REGION"
 echo "Account ID: $ACCOUNT_ID"
 echo "Use Load Balancer: $USE_LOAD_BALANCER"
+echo ""
+echo "ℹ️  This deploys a single service containing all agents:"
+echo "   - NER, RAG, LLM, Hybrid, Simple agents in one container"
+echo "   - All methods available via 'method' parameter"
 
 # Function to get or create VPC resources
 setup_vpc_resources() {
@@ -46,34 +50,26 @@ setup_vpc_resources() {
 
 # Function to create CloudWatch log groups
 create_log_groups() {
-    echo "📊 Creating CloudWatch log groups..."
+    echo "📊 Creating CloudWatch log group..."
     
-    local log_groups=(
-        "/ecs/multilingual-inference-orchestrator"
-        "/ecs/multilingual-inference-ner"
-        "/ecs/multilingual-inference-rag"
-        "/ecs/multilingual-inference-llm"
-        "/ecs/multilingual-inference-hybrid"
-    )
+    local log_group="/ecs/multilingual-inference-orchestrator"
     
-    for log_group in "${log_groups[@]}"; do
-        if ! aws logs describe-log-groups \
+    if ! aws logs describe-log-groups \
+        --profile $AWS_PROFILE \
+        --region $AWS_REGION \
+        --log-group-name-prefix "$log_group" \
+        --query 'logGroups[?logGroupName==`'$log_group'`]' \
+        --output text | grep -q "$log_group"; then
+        
+        echo "Creating log group: $log_group"
+        aws logs create-log-group \
             --profile $AWS_PROFILE \
             --region $AWS_REGION \
-            --log-group-name-prefix "$log_group" \
-            --query 'logGroups[?logGroupName==`'$log_group'`]' \
-            --output text | grep -q "$log_group"; then
-            
-            echo "Creating log group: $log_group"
-            aws logs create-log-group \
-                --profile $AWS_PROFILE \
-                --region $AWS_REGION \
-                --log-group-name "$log_group" \
-                --tags Environment=production,Platform=ARM64
-        else
-            echo "✅ Log group exists: $log_group"
-        fi
-    done
+            --log-group-name "$log_group" \
+            --tags Environment=production,Platform=ARM64,Service=orchestrator
+    else
+        echo "✅ Log group exists: $log_group"
+    fi
 }
 
 # Function to register task definition
@@ -198,6 +194,55 @@ create_or_update_service() {
     fi
 }
 
+# Function to clean up old individual agent services
+cleanup_old_services() {
+    echo "🧹 Cleaning up old individual agent services..."
+    
+    local old_services=(
+        "multilingual-inference-ner"
+        "multilingual-inference-rag"
+        "multilingual-inference-llm"
+        "multilingual-inference-hybrid"
+    )
+    
+    for service_name in "${old_services[@]}"; do
+        if aws ecs describe-services \
+            --profile $AWS_PROFILE \
+            --region $AWS_REGION \
+            --cluster $CLUSTER_NAME \
+            --services $service_name \
+            --query 'services[0].serviceName' \
+            --output text 2>/dev/null | grep -q $service_name; then
+            
+            echo "🗑️  Found old service: $service_name - scaling down to 0"
+            aws ecs update-service \
+                --profile $AWS_PROFILE \
+                --region $AWS_REGION \
+                --cluster $CLUSTER_NAME \
+                --service $service_name \
+                --desired-count 0 \
+                >/dev/null 2>&1
+            
+            echo "⏳ Waiting for service to scale down..."
+            aws ecs wait services-stable \
+                --profile $AWS_PROFILE \
+                --region $AWS_REGION \
+                --cluster $CLUSTER_NAME \
+                --services $service_name
+            
+            echo "🗑️  Deleting old service: $service_name"
+            aws ecs delete-service \
+                --profile $AWS_PROFILE \
+                --region $AWS_REGION \
+                --cluster $CLUSTER_NAME \
+                --service $service_name \
+                >/dev/null 2>&1
+            
+            echo "✅ Cleaned up old service: $service_name"
+        fi
+    done
+}
+
 # Function to setup auto-scaling
 setup_autoscaling() {
     local autoscaling_file=$1
@@ -240,10 +285,13 @@ main() {
     # Step 1: Setup VPC resources
     setup_vpc_resources
     
-    # Step 2: Create CloudWatch log groups
+    # Step 2: Clean up old individual agent services
+    cleanup_old_services
+    
+    # Step 3: Create CloudWatch log groups
     create_log_groups
     
-    # Step 3: Create ECS cluster if it doesn't exist
+    # Step 4: Create ECS cluster if it doesn't exist
     echo "🏗️  Creating ECS cluster: $CLUSTER_NAME"
     if aws ecs create-cluster \
         --profile $AWS_PROFILE \
@@ -258,65 +306,56 @@ main() {
         echo "ℹ️  ECS cluster already exists: $CLUSTER_NAME"
     fi
     
-    # Step 4: Register task definitions
-    echo "📋 Registering task definitions..."
+    # Step 5: Register orchestrator task definition
+    echo "📋 Registering orchestrator task definition..."
     
-    local task_definitions=(
-        "infrastructure/ecs/task-definitions/orchestrator-task-def.json:multilingual-inference-orchestrator"
-        "infrastructure/ecs/task-definitions/ner-task-def.json:multilingual-inference-ner"
-        "infrastructure/ecs/task-definitions/rag-task-def.json:multilingual-inference-rag"
-        "infrastructure/ecs/task-definitions/llm-task-def.json:multilingual-inference-llm"
-        "infrastructure/ecs/task-definitions/hybrid-task-def.json:multilingual-inference-hybrid"
-    )
+    local task_def_file="infrastructure/ecs/task-definitions/orchestrator-task-def.json"
+    local task_def_name="multilingual-inference-orchestrator"
     
-    for task_def in "${task_definitions[@]}"; do
-        IFS=':' read -r file name <<< "$task_def"
-        if [ -f "$file" ]; then
-            register_task_definition "$file" "$name"
-        else
-            echo "⚠️  Task definition file not found: $file"
-        fi
-    done
+    if [ -f "$task_def_file" ]; then
+        register_task_definition "$task_def_file" "$task_def_name"
+        echo "✅ Orchestrator task definition registered"
+    else
+        echo "❌ Task definition file not found: $task_def_file"
+        exit 1
+    fi
     
-    # Step 5: Create services
-    echo "🚀 Creating/updating services..."
+    # Step 6: Create orchestrator service
+    echo "🚀 Creating/updating orchestrator service..."
     
-    local services=(
-        "infrastructure/ecs/services/orchestrator-service.json:multilingual-inference-orchestrator"
-        "infrastructure/ecs/services/ner-service.json:multilingual-inference-ner"
-        "infrastructure/ecs/services/rag-service.json:multilingual-inference-rag"
-        "infrastructure/ecs/services/llm-service.json:multilingual-inference-llm"
-        "infrastructure/ecs/services/hybrid-service.json:multilingual-inference-hybrid"
-    )
+    local service_file="infrastructure/ecs/services/orchestrator-service.json"
+    local service_name="multilingual-inference-orchestrator"
     
-    for service in "${services[@]}"; do
-        IFS=':' read -r file name <<< "$service"
-        if [ -f "$file" ]; then
-            create_or_update_service "$file" "$name"
-        else
-            echo "⚠️  Service definition file not found: $file"
-        fi
-    done
+    if [ -f "$service_file" ]; then
+        create_or_update_service "$service_file" "$service_name"
+        echo "✅ Orchestrator service deployed"
+    else
+        echo "❌ Service definition file not found: $service_file"
+        exit 1
+    fi
     
-    # Step 6: Setup auto-scaling (optional)
-    echo "📈 Setting up auto-scaling..."
+    # Step 7: Setup auto-scaling for orchestrator
+    echo "📈 Setting up auto-scaling for orchestrator..."
     setup_autoscaling "infrastructure/ecs/autoscaling/orchestrator-autoscaling.json" "service/$CLUSTER_NAME/multilingual-inference-orchestrator"
-    setup_autoscaling "infrastructure/ecs/autoscaling/agent-autoscaling.json" "service/$CLUSTER_NAME/multilingual-inference-ner"
-    setup_autoscaling "infrastructure/ecs/autoscaling/agent-autoscaling.json" "service/$CLUSTER_NAME/multilingual-inference-rag"
-    setup_autoscaling "infrastructure/ecs/autoscaling/agent-autoscaling.json" "service/$CLUSTER_NAME/multilingual-inference-llm"
-    setup_autoscaling "infrastructure/ecs/autoscaling/agent-autoscaling.json" "service/$CLUSTER_NAME/multilingual-inference-hybrid"
     
     echo ""
-    echo "🎉 ECS deployment completed successfully!"
+    echo "🎉 ECS orchestrator deployment completed successfully!"
     echo "📊 Deployment Summary:"
     echo "   - Cluster: $CLUSTER_NAME"
+    echo "   - Service: multilingual-inference-orchestrator (contains all agents)"
     echo "   - Region: $AWS_REGION"
     echo "   - Platform: ARM64"
     echo "   - Load Balancer: $USE_LOAD_BALANCER"
     echo ""
+    echo "🧠 Available Agents (all in one container):"
+    echo "   - NER, RAG, LLM, Hybrid, Simple agents"
+    echo "   - Access via 'method' parameter in API requests"
+    echo ""
     echo "🔍 Check deployment status:"
-    echo "   aws ecs list-services --profile $AWS_PROFILE --region $AWS_REGION --cluster $CLUSTER_NAME"
     echo "   aws ecs describe-services --profile $AWS_PROFILE --region $AWS_REGION --cluster $CLUSTER_NAME --services multilingual-inference-orchestrator"
+    echo ""
+    echo "🧪 Test the API (replace <ALB-DNS> with your load balancer DNS):"
+    echo "   curl -X POST \"http://<ALB-DNS>/infer\" -H \"Content-Type: application/json\" -d '{\"product_name\": \"Samsung Galaxy S24\", \"method\": \"orchestrator\"}'"
 }
 
 # Run main function
