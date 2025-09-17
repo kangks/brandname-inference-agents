@@ -1,0 +1,52 @@
+{
+  "models": {
+    "ner": {
+      "default": {
+        "name": "default",
+        "model_type": "ner",
+        "description": "Default spaCy English NER model",
+        "version": "3.7.0",
+        "status": "available",
+        "file_path": "en_core_web_sm",
+        "download_url": null,
+        "size_mb": null,
+        "accuracy_metrics": null,
+        "tags": null
+      }
+    },
+    "embedding": {
+      "default": {
+        "name": "default",
+        "model_type": "embedding",
+        "description": "Default multilingual sentence transformer",
+        "version": "1.0.0",
+        "status": "available",
+        "file_path": null,
+        "download_url": null,
+        "size_mb": null,
+        "accuracy_metrics": null,
+        "tags": null
+      }
+    },
+    "llm": {
+      "default": {
+        "name": "default",
+        "model_type": "llm",
+        "description": "Default AWS Nova Pro model",
+        "version": "1.0.0",
+        "status": "available",
+        "file_path": null,
+        "download_url": null,
+        "size_mb": null,
+        "accuracy_metrics": null,
+        "tags": null
+      }
+    }
+  },
+  "active_models": {
+    "ner": "",
+    "embedding": "",
+    "llm": ""
+  },
+  "version": "1.0.0"
+}
