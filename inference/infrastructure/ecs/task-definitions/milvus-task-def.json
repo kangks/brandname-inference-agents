@@ -1,5 +1,5 @@
 {
-  "family": "multilingual-inference-milvus",
+  "family": "multilingual-inference-milvus-efs-distributed",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "2048",

@@ -1,5 +1,5 @@
 {
-  "family": "multilingual-inference-milvus-efs",
+  "family": "multilingual-inference-milvus-local",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "2048",
@@ -8,22 +8,8 @@
     "cpuArchitecture": "ARM64",
     "operatingSystemFamily": "LINUX"
   },
-  "executionRoleArn": "arn:aws:iam::654654616949:role/ecsTaskExecutionRole",
-  "taskRoleArn": "arn:aws:iam::654654616949:role/multilingual-inference-task-role",
-  "volumes": [
-    {
-      "name": "milvus-data",
-      "efsVolumeConfiguration": {
-        "fileSystemId": "fs-03d716e7cee12520f",
-        "rootDirectory": "/",
-        "transitEncryption": "ENABLED",
-        "authorizationConfig": {
-          "accessPointId": "fsap-01dc4d233bf104d38",
-          "iam": "ENABLED"
-        }
-      }
-    }
-  ],
+  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/multilingual-inference-task-role",
   "containerDefinitions": [
     {
       "name": "milvus-standalone",
@@ -39,13 +25,6 @@
           "protocol": "tcp"
         }
       ],
-      "mountPoints": [
-        {
-          "sourceVolume": "milvus-data",
-          "containerPath": "/var/lib/milvus",
-          "readOnly": false
-        }
-      ],
       "environment": [
         {
           "name": "ETCD_USE_EMBED",
@@ -58,6 +37,10 @@
         {
           "name": "COMMON_STORAGETYPE",
           "value": "local"
+        },
+        {
+          "name": "MILVUS_CONFIG_PATH",
+          "value": "/milvus/configs/milvus.yaml"
         }
       ],
       "logConfiguration": {

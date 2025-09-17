@@ -1,5 +1,5 @@
 # Milvus configuration for multilingual inference system
-# Optimized for ARM64 ECS deployment with EFS storage (optional)
+# Optimized for ARM64 ECS deployment with LOCAL DISK storage (default)
 
 etcd:
   endpoints:
@@ -63,19 +63,19 @@ log:
     maxAge: 10
     maxBackups: 20
 
-# Performance tuning for ARM64
+# Performance tuning for ARM64 with local storage
 common:
   defaultPartitionName: "_default"
   defaultIndexName: "_default_idx"
   entityExpiration: -1
   indexSliceSize: 16
   
-# Memory settings optimized for ECS Fargate
+# Memory settings optimized for ECS Fargate with local storage
 queryNode:
   gracefulTime: 1000
   gracefulStopTimeout: 30
   
-# Storage settings
+# Local storage settings (default configuration)
 localStorage:
   path: /var/lib/milvus/data
 
@@ -83,3 +83,11 @@ localStorage:
 metrics:
   enableMetrics: true
   port: 9091
+
+# Local storage optimizations
+storage:
+  # Use local disk for better performance in ephemeral environments
+  type: local
+  # Optimize for container lifecycle
+  autoFlush: true
+  flushInterval: 60

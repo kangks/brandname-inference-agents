@@ -88,11 +88,27 @@ echo ""
 echo "🗄️  Step 4: Deploying Milvus vector database (optional for RAG agent)..."
 read -p "Deploy Milvus vector database? (y/N): " deploy_milvus
 if [[ $deploy_milvus =~ ^[Yy]$ ]]; then
-    if [ -f "${SCRIPT_DIR}/step5_setup-milvus-storage.sh" ]; then
-        ${SCRIPT_DIR}/step5_setup-milvus-storage.sh
-    fi
+    echo ""
+    echo "📦 Choose Milvus storage type:"
+    echo "1. Local disk (default) - Faster, ephemeral storage"
+    echo "2. EFS - Persistent, shared storage"
+    read -p "Select storage type (1/2) [1]: " storage_choice
+    
+    case $storage_choice in
+        2)
+            export STORAGE_TYPE="efs"
+            echo "✅ Selected EFS storage (persistent)"
+            ;;
+        *)
+            export STORAGE_TYPE="local"
+            echo "✅ Selected local disk storage (default, ephemeral)"
+            ;;
+    esac
+    
     if [ -f "${SCRIPT_DIR}/step4_deploy-milvus.sh" ]; then
         ${SCRIPT_DIR}/step4_deploy-milvus.sh
+    else
+        echo "❌ Milvus deployment script not found: ${SCRIPT_DIR}/step4_deploy-milvus.sh"
     fi
 else
     echo "⏭️  Skipping Milvus deployment (RAG agent will use fallback mode)"

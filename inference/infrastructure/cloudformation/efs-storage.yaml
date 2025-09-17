@@ -1,0 +1,174 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'EFS storage for Milvus vector database - Optional persistent storage'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    Description: Environment name
+  
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID where EFS will be deployed
+    Default: ""
+  
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnet IDs for EFS mount targets
+    Default: []
+
+Conditions:
+  UseDefaultVpc: !Equals [!Ref VpcId, ""]
+  UseDefaultSubnets: !Equals [!Join [",", !Ref SubnetIds], ""]
+
+Resources:
+  # EFS File System
+  MilvusEFS:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      CreationToken: !Sub "${AWS::StackName}-milvus-efs"
+      PerformanceMode: generalPurpose
+      ThroughputMode: provisioned
+      ProvisionedThroughputInMibps: 100
+      Encrypted: true
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-milvus-storage"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Service
+          Value: milvus
+        - Key: Platform
+          Value: ARM64
+
+  # Security Group for EFS
+  EFSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Milvus EFS access
+      VpcId: !If 
+        - UseDefaultVpc
+        - !Ref AWS::NoValue
+        - !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref ECSSecurityGroup
+          Description: EFS access from ECS tasks
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-efs-sg"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Security Group for ECS tasks accessing EFS
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ECS tasks accessing EFS
+      VpcId: !If 
+        - UseDefaultVpc
+        - !Ref AWS::NoValue
+        - !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          DestinationSecurityGroupId: !Ref EFSSecurityGroup
+          Description: EFS access
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-ecs-efs-sg"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # EFS Access Point for Milvus Data
+  MilvusDataAccessPoint:
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      FileSystemId: !Ref MilvusEFS
+      PosixUser:
+        Uid: 1000
+        Gid: 1000
+      RootDirectory:
+        Path: "/milvus-data"
+        CreationInfo:
+          OwnerUid: 1000
+          OwnerGid: 1000
+          Permissions: "755"
+      AccessPointTags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-milvus-data-ap"
+        - Key: Purpose
+          Value: milvus-data-storage
+
+  # EFS Access Point for Milvus Logs
+  MilvusLogsAccessPoint:
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      FileSystemId: !Ref MilvusEFS
+      PosixUser:
+        Uid: 1000
+        Gid: 1000
+      RootDirectory:
+        Path: "/milvus-logs"
+        CreationInfo:
+          OwnerUid: 1000
+          OwnerGid: 1000
+          Permissions: "755"
+      AccessPointTags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-milvus-logs-ap"
+        - Key: Purpose
+          Value: milvus-logs-storage
+
+  # EFS Mount Targets (automatically created for all subnets in VPC if not specified)
+  EFSMountTarget1:
+    Type: AWS::EFS::MountTarget
+    Condition: UseDefaultSubnets
+    Properties:
+      FileSystemId: !Ref MilvusEFS
+      SubnetId: !Select [0, !GetAZs '']
+      SecurityGroups:
+        - !Ref EFSSecurityGroup
+
+  EFSMountTarget2:
+    Type: AWS::EFS::MountTarget
+    Condition: UseDefaultSubnets
+    Properties:
+      FileSystemId: !Ref MilvusEFS
+      SubnetId: !Select [1, !GetAZs '']
+      SecurityGroups:
+        - !Ref EFSSecurityGroup
+
+Outputs:
+  EFSFileSystemId:
+    Description: EFS File System ID for Milvus storage
+    Value: !Ref MilvusEFS
+    Export:
+      Name: !Sub "${AWS::StackName}-EFS-FileSystemId"
+
+  MilvusDataAccessPointId:
+    Description: EFS Access Point ID for Milvus data
+    Value: !Ref MilvusDataAccessPoint
+    Export:
+      Name: !Sub "${AWS::StackName}-EFS-DataAccessPointId"
+
+  MilvusLogsAccessPointId:
+    Description: EFS Access Point ID for Milvus logs
+    Value: !Ref MilvusLogsAccessPoint
+    Export:
+      Name: !Sub "${AWS::StackName}-EFS-LogsAccessPointId"
+
+  ECSSecurityGroupId:
+    Description: Security Group ID for ECS tasks accessing EFS
+    Value: !Ref ECSSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-ECS-EFS-SecurityGroupId"
+
+  EFSSecurityGroupId:
+    Description: Security Group ID for EFS
+    Value: !Ref EFSSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-EFS-SecurityGroupId"

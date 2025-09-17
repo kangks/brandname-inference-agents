@@ -25,13 +25,19 @@ infrastructure/
 │   ├── step1_deploy-cloudformation.sh   # Deploy AWS infrastructure
 │   ├── step2_build-and-push-images.sh   # Build orchestrator image
 │   ├── step3_deploy-ecs.sh              # Deploy ECS service
-│   ├── step4_deploy-milvus.sh           # Deploy vector database (optional)
-│   └── step5_setup-milvus-storage.sh    # Setup EFS storage (optional)
+│   ├── step4_deploy-milvus.sh           # 🗄️ Milvus with storage options
+│   └── step5_setup-milvus-storage.sh    # Setup EFS storage (legacy)
 ├── ecs/                   # ECS configurations
 │   ├── task-definitions/  # Task definitions
 │   └── services/         # Service configurations
 ├── cloudformation/        # Infrastructure templates
 ├── docker/               # Docker configurations
+├── milvus/               # Milvus configurations
+│   ├── milvus.yaml       # EFS storage config
+│   └── milvus-local.yaml # Local storage config (default)
+├── storage/              # Storage configurations
+│   ├── README.md         # Storage options guide
+│   └── efs-milvus.json   # EFS configuration (legacy)
 └── README.md
 ```
 
@@ -55,8 +61,9 @@ This script automatically:
 ./scripts/step3_deploy-ecs.sh            # Deploy ECS service
 
 # Optional: Deploy Milvus for RAG agent
+./scripts/step4_deploy-milvus.sh          # Deploy with configurable storage
+# OR (legacy approach)
 ./scripts/step5_setup-milvus-storage.sh   # Setup EFS storage
-./scripts/step4_deploy-milvus.sh          # Deploy Milvus service
 ```
 
 ### Option 3: Test Existing Deployment
@@ -80,7 +87,8 @@ This script automatically:
 
 ### Optional Components
 - **Milvus Service**: Vector database for RAG agent
-- **EFS Storage**: Persistent storage for Milvus
+  - **Local Storage** (default): Faster, ephemeral storage
+  - **EFS Storage** (optional): Persistent, shared storage
 
 ## Configuration
 
@@ -174,9 +182,35 @@ aws ecs list-services --cluster multilingual-inference-cluster
 - **Auto-scaling**: Scales 2-10 instances based on demand
 - **Fargate**: Pay only for resources used
 
+## Milvus Storage Options
+
+The system now supports flexible storage configuration for Milvus:
+
+### Local Storage (Default)
+```bash
+# Deploy with local disk storage (faster, ephemeral)
+STORAGE_TYPE=local ./scripts/step4_deploy-milvus.sh
+```
+- ✅ Faster performance
+- ✅ Lower cost
+- ❌ Data lost on container restart
+
+### EFS Storage (Optional)
+```bash
+# Deploy with EFS storage (persistent, shared)
+STORAGE_TYPE=efs ./scripts/step4_deploy-milvus.sh
+```
+- ✅ Persistent storage
+- ✅ Shared between containers
+- ❌ Slightly slower performance
+- ❌ Additional EFS costs
+
+See **[Storage Configuration Guide](storage/README.md)** for detailed comparison and migration instructions.
+
 ## Support
 
 For detailed information:
 - **[Main README](../README.md)** - Getting started guide
 - **[API Usage Guide](../docs/API_USAGE_GUIDE.md)** - Complete API reference
+- **[Storage Guide](storage/README.md)** - Milvus storage options
 - **[Architecture FAQ](../../INFERENCE_ARCHITECTURE_FAQ.md)** - Common questions
