@@ -2,7 +2,7 @@
 Configuration management system for multilingual product inference.
 
 This module provides environment-based configuration management with model switching
-capabilities, following PEP 8 standards and supporting AWS ml-sandbox profile.
+capabilities, following PEP 8 standards and supporting AWS IAM roles for ECS deployment.
 """
 
 import os
@@ -114,15 +114,14 @@ class MilvusConfig:
 class AWSConfig:
     """Configuration for AWS services."""
     
-    profile_name: str = "ml-sandbox"
+    profile_name: Optional[str] = None  # Use IAM role when None (ECS deployment)
     region: str = "us-east-1"
     s3_bucket: Optional[str] = None
     bedrock_region: str = "us-east-1"
     
     def __post_init__(self) -> None:
         """Validate AWS configuration."""
-        if not self.profile_name:
-            raise ValueError("AWS profile name cannot be empty")
+        # profile_name can be None for ECS deployments using IAM roles
         if not self.region:
             raise ValueError("AWS region cannot be empty")
 
@@ -254,7 +253,7 @@ class ConfigManager:
         config.milvus.collection_name = os.getenv("MILVUS_COLLECTION", config.milvus.collection_name)
         
         # AWS
-        config.aws.profile_name = os.getenv("AWS_PROFILE", config.aws.profile_name)
+        config.aws.profile_name = os.getenv("AWS_PROFILE")  # None for ECS IAM role
         config.aws.region = os.getenv("AWS_REGION", config.aws.region)
         config.aws.s3_bucket = os.getenv("S3_BUCKET")
         
@@ -287,7 +286,8 @@ class ConfigManager:
         # Validate AWS profile exists
         try:
             import boto3
-            session = boto3.Session(profile_name=config.aws.profile_name)
+            # Use profile only if specified, otherwise use default credentials (IAM role)
+            session = boto3.Session(profile_name=config.aws.profile_name) if config.aws.profile_name else boto3.Session()
             # Test if we can get credentials
             session.get_credentials()
         except Exception as e:

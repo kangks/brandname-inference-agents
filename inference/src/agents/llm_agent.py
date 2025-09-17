@@ -644,9 +644,9 @@ class FinetunedNovaLLMAgent(StrandsLLMAgent):
         Args:
             config: Configuration dictionary containing model and inference settings
         """
-        # Set default fine-tuned model ID
+        # Set default fine-tuned model deployment ARN
         if "model_id" not in config:
-            config["model_id"] = "arn:aws:bedrock:us-east-1:654654616949:custom-model/amazon.nova-pro-v1:0:300k/e4oo8js4bjz5"
+            config["model_id"] = "arn:aws:bedrock:us-east-1:654654616949:custom-model-deployment/9o1i1v4ng8wy"
         
         super().__init__(config)
         self.agent_name = "finetuned_nova_llm"
@@ -692,10 +692,7 @@ Respond with only the brand name, no additional text or explanation."""
             
             self.strands_agent = Agent(
                 model=self.model_id,
-                system_prompt=system_prompt,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-                top_p=self.top_p
+                system_prompt=system_prompt
             )
             
             # Validate agent access

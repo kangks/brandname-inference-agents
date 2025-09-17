@@ -344,19 +344,20 @@ class DiagnosticsCollector:
             import boto3
             from botocore.exceptions import NoCredentialsError, ProfileNotFound
             
-            session = boto3.Session(profile_name='ml-sandbox')
+            # Use default credentials (IAM role) instead of hardcoded profile
+            session = boto3.Session()
             credentials = session.get_credentials()
             
             if credentials:
                 status = "pass"
-                message = "AWS ml-sandbox profile configured"
+                message = "AWS credentials configured (IAM role or profile)"
                 details = {
-                    "profile": "ml-sandbox",
+                    "credentials_source": "IAM role or default profile",
                     "region": session.region_name or "us-east-1"
                 }
             else:
                 status = "fail"
-                message = "AWS ml-sandbox profile not found or no credentials"
+                message = "AWS credentials not found"
                 details = None
             
             tests.append(DiagnosticTest(

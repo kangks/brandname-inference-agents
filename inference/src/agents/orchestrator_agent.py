@@ -222,7 +222,7 @@ class StrandsMultiAgentOrchestrator(Agent):
         agent_id = f"finetuned_nova_agent_{uuid.uuid4().hex[:8]}"
         
         finetuned_nova_agent = Agent(
-            model="arn:aws:bedrock:us-east-1:654654616949:custom-model/amazon.nova-pro-v1:0:300k/e4oo8js4bjz5",
+            model="arn:aws:bedrock:us-east-1:654654616949:custom-model-deployment/9o1i1v4ng8wy",
             name=f"FinetunedNova_Agent_{agent_id}",  # Ensure unique name for Swarm
             system_prompt="""You are a specialized fine-tuned Nova model optimized specifically for brand extraction from product titles.
 

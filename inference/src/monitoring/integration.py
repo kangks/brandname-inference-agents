@@ -37,7 +37,7 @@ class MonitoringIntegration:
         enable_cloudwatch: bool = True,
         enable_endpoints: bool = True,
         aws_region: str = "us-east-1",
-        aws_profile: str = "ml-sandbox"
+        aws_profile: Optional[str] = None  # Use IAM role when None
     ) -> None:
         """
         Initialize monitoring integration.
@@ -323,7 +323,7 @@ def create_monitoring_integration(
     enable_cloudwatch: bool = True,
     enable_endpoints: bool = True,
     aws_region: str = "us-east-1",
-    aws_profile: str = "ml-sandbox"
+    aws_profile: Optional[str] = None  # Use IAM role when None
 ) -> MonitoringIntegration:
     """
     Create and configure monitoring integration.

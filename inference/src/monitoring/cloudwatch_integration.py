@@ -402,7 +402,7 @@ class CloudWatchMonitor:
     def __init__(
         self,
         region_name: str = "us-east-1",
-        profile_name: str = "ml-sandbox"
+        profile_name: Optional[str] = None  # Use IAM role when None
     ) -> None:
         """
         Initialize CloudWatch monitor.
@@ -421,7 +421,8 @@ class CloudWatchMonitor:
         
         if BOTO3_AVAILABLE:
             try:
-                session = boto3.Session(profile_name=profile_name)
+                # Use profile only if specified, otherwise use default credentials (IAM role)
+                session = boto3.Session(profile_name=profile_name) if profile_name else boto3.Session()
                 self.cloudwatch_client = session.client('cloudwatch', region_name=region_name)
                 self.logs_client = session.client('logs', region_name=region_name)
                 self.logger.info(f"CloudWatch monitor initialized for region {region_name}")
@@ -752,7 +753,7 @@ def create_metrics_collector(namespace: str = "MultilingualInference") -> Metric
 
 def create_cloudwatch_monitor(
     region_name: str = "us-east-1",
-    profile_name: str = "ml-sandbox"
+    profile_name: Optional[str] = None  # Use IAM role when None
 ) -> CloudWatchMonitor:
     """
     Create a CloudWatch monitor instance.

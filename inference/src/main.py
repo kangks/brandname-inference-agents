@@ -37,7 +37,8 @@ async def initialize_system() -> None:
         # Validate AWS configuration
         try:
             import boto3
-            session = boto3.Session(profile_name=config.aws.profile_name)
+            # Use profile only if specified, otherwise use default credentials (IAM role)
+            session = boto3.Session(profile_name=config.aws.profile_name) if config.aws.profile_name else boto3.Session()
             credentials = session.get_credentials()
             if credentials:
                 logger.info("AWS credentials validated successfully")
@@ -77,7 +78,8 @@ async def health_check() -> dict:
         # Check AWS connectivity
         try:
             import boto3
-            session = boto3.Session(profile_name=config.aws.profile_name)
+            # Use profile only if specified, otherwise use default credentials (IAM role)
+            session = boto3.Session(profile_name=config.aws.profile_name) if config.aws.profile_name else boto3.Session()
             sts = session.client('sts', region_name=config.aws.region)
             identity = sts.get_caller_identity()
             health_status["components"]["aws"] = "connected"

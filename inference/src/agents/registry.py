@@ -91,7 +91,7 @@ class AgentRegistry:
         self.agent_configs["finetuned_nova_llm"] = {
             "aws_profile": self.system_config.aws.profile_name,
             "aws_region": self.system_config.aws.region,
-            "model_id": "arn:aws:bedrock:us-east-1:654654616949:custom-model/amazon.nova-pro-v1:0:300k/e4oo8js4bjz5",
+            "model_id": "arn:aws:bedrock:us-east-1:654654616949:custom-model-deployment/9o1i1v4ng8wy",
             "max_tokens": 500,  # Shorter responses expected from fine-tuned model
             "temperature": 0.05,  # Lower temperature for more focused responses
             "top_p": 0.9,

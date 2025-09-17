@@ -8,7 +8,7 @@ This module provides comprehensive configuration management for the multilingual
 - **Model Registry**: Centralized management of NER, embedding, and LLM models with metadata tracking
 - **Configuration Validation**: Comprehensive validation with detailed error reporting
 - **Model Switching**: Easy switching between different model configurations
-- **AWS Integration**: Built-in support for AWS ml-sandbox profile and us-east-1 region
+- **AWS Integration**: Built-in support for AWS IAM roles (ECS) and optional profile configuration
 - **Type Safety**: Full type hints and dataclass validation
 
 ## Quick Start
@@ -95,7 +95,7 @@ The system automatically loads configuration from environment variables:
 - `LOG_LEVEL`: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
 
 ### AWS Settings
-- `AWS_PROFILE`: AWS profile name (default: ml-sandbox)
+- `AWS_PROFILE`: AWS profile name (optional - uses IAM role when not set)
 - `AWS_REGION`: AWS region (default: us-east-1)
 - `S3_BUCKET`: S3 bucket for model artifacts
 
@@ -274,11 +274,14 @@ pip install -r requirements.txt
 ### AWS Configuration
 
 ```bash
-# Configure AWS profile
-aws configure --profile ml-sandbox
+# For local development (optional)
+aws configure --profile your-profile
 
-# Set environment variables
-export AWS_PROFILE=ml-sandbox
+# Set environment variables (optional for local dev)
+export AWS_PROFILE=your-profile
+export AWS_REGION=us-east-1
+
+# For ECS deployment - no profile needed, uses IAM role
 export AWS_REGION=us-east-1
 ```
 

@@ -163,11 +163,8 @@ class ConfigValidator:
     
     def _validate_aws_config(self, config: SystemConfig) -> None:
         """Validate AWS configuration."""
-        # Check AWS profile
-        if not config.aws.profile_name:
-            self.errors.append(
-                ValidationError("AWS profile name cannot be empty", "aws.profile_name")
-            )
+        # AWS profile is optional - ECS deployments use IAM roles
+        # No validation needed for profile_name
         
         # Validate AWS region
         valid_regions = [
@@ -355,9 +352,9 @@ def validate_environment_variables() -> List[str]:
     
     # Check critical environment variables
     critical_vars = {
-        "AWS_PROFILE": "ml-sandbox",
         "AWS_REGION": "us-east-1"
     }
+    # Note: AWS_PROFILE is optional - ECS uses IAM roles
     
     for var_name, expected_value in critical_vars.items():
         actual_value = os.getenv(var_name)
