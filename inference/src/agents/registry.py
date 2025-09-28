@@ -88,10 +88,15 @@ class AgentRegistry:
         }
         
         # Fine-tuned Nova LLM Agent Configuration
+        # Read custom deployment name from environment variable (set in ECS task definition)
+        import os
+        custom_deployment_name = os.getenv("CUSTOM_DEPLOYMENT_NAME")
+        
         self.agent_configs["finetuned_nova_llm"] = {
             "aws_profile": self.system_config.aws.profile_name,
             "aws_region": self.system_config.aws.region,
-            "model_id": "arn:aws:bedrock:us-east-1:654654616949:custom-model-deployment/9o1i1v4ng8wy",
+            "custom_deployment_name": custom_deployment_name,  # Use environment variable
+            "model_id": None,  # Fallback ARN
             "max_tokens": 500,  # Shorter responses expected from fine-tuned model
             "temperature": 0.05,  # Lower temperature for more focused responses
             "top_p": 0.9,
@@ -264,6 +269,16 @@ class AgentRegistry:
         try:
             logger.info("Registering Fine-tuned Nova LLM agent...")
             
+            # Log configuration details for debugging
+            config = self.agent_configs["finetuned_nova_llm"]
+            custom_deployment_name = config.get("custom_deployment_name")
+            model_id = config.get("model_id")
+            
+            logger.info(f"   Custom deployment name: {custom_deployment_name}")
+            logger.info(f"   Fallback model ID: {model_id}")
+            logger.info(f"   AWS region: {config.get('aws_region')}")
+            logger.info(f"   AWS profile: {config.get('aws_profile')}")
+            
             # Try to create fine-tuned Nova LLM agent
             try:
                 finetuned_agent = FinetunedNovaLLMAgent(self.agent_configs["finetuned_nova_llm"])
@@ -275,9 +290,10 @@ class AgentRegistry:
                 logger.warning(f"❌ Failed to initialize fine-tuned Nova LLM agent: {str(e)}")
                 logger.warning(f"   Error type: {type(e).__name__}")
                 logger.warning("   This may be due to:")
-                logger.warning("   - Fine-tuned model ARN not accessible")
+                logger.warning("   - Fine-tuned model deployment not accessible")
                 logger.warning("   - AWS credentials insufficient for custom model access")
-                logger.warning("   - Model not available in the specified region")
+                logger.warning("   - Model deployment not available in the specified region")
+                logger.warning("   - Custom deployment name not found or invalid")
             
         except Exception as e:
             logger.warning(f"Failed to register fine-tuned Nova LLM agent: {str(e)}")

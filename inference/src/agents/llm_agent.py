@@ -12,6 +12,8 @@ import re
 import asyncio
 from typing import Dict, Any, Optional, List
 import logging
+import boto3
+from botocore.exceptions import ClientError
 
 from strands import Agent, tool
 
@@ -644,10 +646,6 @@ class FinetunedNovaLLMAgent(StrandsLLMAgent):
         Args:
             config: Configuration dictionary containing model and inference settings
         """
-        # Set default fine-tuned model deployment ARN
-        if "model_id" not in config:
-            config["model_id"] = "arn:aws:bedrock:us-east-1:654654616949:custom-model-deployment/9o1i1v4ng8wy"
-        
         super().__init__(config)
         self.agent_name = "finetuned_nova_llm"
         
@@ -655,9 +653,62 @@ class FinetunedNovaLLMAgent(StrandsLLMAgent):
         self.is_finetuned = True
         self.training_domain = "brand_extraction"
         
+        # Get custom deployment configuration
+        self.custom_deployment_name = self.get_config_value("custom_deployment_name", None)
+        self.aws_region = self.get_config_value("aws_region", "us-east-1")
+        self.aws_profile = self.get_config_value("aws_profile", None)
+        
+        # Initialize deployment ARN (will be set during initialization)
+        self.deployment_arn = None
+        
         # Adjust parameters for fine-tuned model
         self.temperature = self.get_config_value("temperature", 0.05)  # Lower temperature for more focused responses
         self.confidence_threshold = self.get_config_value("confidence_threshold", 0.6)  # Higher threshold due to specialization
+    
+    async def _get_custom_model_deployment_arn(self) -> str:
+        """
+        Get custom model deployment ARN using AWS Bedrock client.
+        
+        Returns:
+            Deployment ARN for the custom model
+            
+        Raises:
+            AgentInitializationError: If deployment ARN cannot be retrieved
+        """
+        try:
+            # Create Bedrock client
+            session = boto3.Session(profile_name=self.aws_profile) if self.aws_profile else boto3.Session()
+            bedrock_client = session.client('bedrock', region_name=self.aws_region)
+            
+            self.logger.info(f"Getting custom model deployment for: {self.custom_deployment_name}")
+            
+            # Get custom model deployment
+            response = bedrock_client.get_custom_model_deployment(
+                customModelDeploymentIdentifier=self.custom_deployment_name
+            )
+            
+            deployment_arn = response['customModelDeploymentArn']
+            self.logger.info(f"Successfully retrieved deployment ARN: {deployment_arn}")
+            
+            return deployment_arn
+            
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            error_message = e.response.get('Error', {}).get('Message', str(e))
+            
+            self.logger.error(f"AWS Bedrock error ({error_code}): {error_message}")
+            raise AgentInitializationError(
+                self.agent_name,
+                f"Failed to get custom model deployment ARN: {error_message}",
+                e
+            )
+        except Exception as e:
+            self.logger.error(f"Unexpected error getting deployment ARN: {str(e)}")
+            raise AgentInitializationError(
+                self.agent_name,
+                f"Failed to get custom model deployment ARN: {str(e)}",
+                e
+            )
     
     def _get_finetuned_system_prompt(self) -> str:
         """
@@ -685,13 +736,28 @@ Respond with only the brand name, no additional text or explanation."""
     async def initialize(self) -> None:
         """Initialize fine-tuned Nova agent with specialized configuration."""
         try:
-            self.logger.info(f"Initializing fine-tuned Nova agent with model: {self.model_id}")
+            # Get deployment ARN from custom deployment name if provided
+            if self.custom_deployment_name:
+                self.deployment_arn = await self._get_custom_model_deployment_arn()
+                self.logger.info(f"Retrieved deployment ARN: {self.deployment_arn}")
+            else:
+                # Use model_id from config or default deployment ARN
+                self.deployment_arn = self.get_config_value(
+                    "model_id" 
+                )
+                self.logger.info(f"Using configured deployment ARN: {self.deployment_arn}")
+            
+            self.logger.info(f"Initializing fine-tuned Nova agent with deployment ARN: {self.deployment_arn}")
             
             # Create specialized system prompt for fine-tuned model
             system_prompt = self._get_finetuned_system_prompt()
             
+            # Update model_id to use deployment ARN
+            self.model_id = self.deployment_arn
+            
+            # Initialize Strands agent with deployment ARN (same pattern as regular agent)
             self.strands_agent = Agent(
-                model=self.model_id,
+                model=self.deployment_arn,
                 system_prompt=system_prompt
             )
             
@@ -799,7 +865,7 @@ Brand name:"""
             if "samsung" not in response_clean:
                 self.logger.warning("Fine-tuned model validation: unexpected response format")
             
-            self.logger.info(f"Successfully validated fine-tuned Nova model access: {self.model_id}")
+            self.logger.info(f"Successfully validated fine-tuned Nova model access: {self.deployment_arn}")
             
         except Exception as e:
             raise AgentInitializationError(
