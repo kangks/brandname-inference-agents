@@ -1,0 +1,11 @@
+{
+    "aws_profile": "ml-sandbox",
+    "aws_region": "us-east-1",
+    "custom_deployments": {
+        "finetuned_nova": {
+            "deployment_name": "brandname-inference-nova-pro-custom-model-deployment",
+            "model_id": "arn:aws:bedrock:us-east-1:654654616949:custom-model/amazon.nova-pro-v1:0:300k/nl43ghk0virf"
+        }
+    },
+    "timeout_seconds": 60
+}

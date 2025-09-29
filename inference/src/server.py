@@ -16,7 +16,9 @@ from typing import Dict, Any, Optional, Tuple
 from urllib.parse import urlparse, parse_qs
 
 from .config.settings import get_config, setup_logging
+from .config.method_mapper import MethodAgentMapper
 from .models.data_models import ProductInput, LanguageHint
+from .models.response_formatter import ResponseFormatter
 from .agents.orchestrator_agent import create_orchestrator_agent
 from .agents.registry import get_agent_registry, initialize_default_agents
 
@@ -30,6 +32,11 @@ class InferenceHandler(BaseHTTPRequestHandler):
     def __init__(self, *args, orchestrator=None, individual_agents=None, **kwargs):
         self.orchestrator = orchestrator
         self.individual_agents = individual_agents or {}
+        
+        # Initialize method mapper with agent registry
+        agent_registry = get_agent_registry()
+        self.method_mapper = MethodAgentMapper(agent_registry)
+        
         super().__init__(*args, **kwargs)
     
     def do_GET(self):
@@ -67,85 +74,109 @@ class InferenceHandler(BaseHTTPRequestHandler):
         try:
             config = get_config()
             
-            health_status = {
-                "status": "healthy",
-                "service": "multilingual-inference-orchestrator",
+            # Prepare orchestrator status
+            orchestrator_status = {}
+            if hasattr(self, 'orchestrator') and self.orchestrator:
+                orchestrator_status = {
+                    "status": "available",
+                    "agents_count": len(getattr(self.orchestrator, 'agents', []))
+                }
+            else:
+                orchestrator_status = {
+                    "status": "not_initialized",
+                    "agents_count": 0
+                }
+            
+            # Prepare individual agents status
+            individual_agents = {}
+            for agent_name, agent in getattr(self, 'individual_agents', {}).items():
+                individual_agents[agent_name] = {
+                    "is_available": agent is not None,
+                    "is_initialized": agent.is_initialized() if agent else False
+                }
+            
+            # Additional service information
+            service_info = {
                 "environment": config.environment.value,
-                "aws_region": config.aws.region,
-                "timestamp": asyncio.get_event_loop().time()
+                "aws_region": config.aws.region
             }
             
-            # Check if orchestrator is available
-            if hasattr(self, 'orchestrator') and self.orchestrator:
-                health_status["orchestrator"] = "available"
-                health_status["orchestrator_agents_count"] = len(getattr(self.orchestrator, 'agents', []))
-            else:
-                health_status["orchestrator"] = "not_initialized"
-                health_status["orchestrator_agents_count"] = 0
+            # Format health response using ResponseFormatter
+            health_response = ResponseFormatter.format_health_response(
+                orchestrator_status=orchestrator_status,
+                individual_agents=individual_agents,
+                service_info=service_info
+            )
             
-            # Check individual agents
-            health_status["individual_agents_count"] = len(getattr(self, 'individual_agents', {}))
-            health_status["available_methods"] = list(getattr(self, 'individual_agents', {}).keys())
-            health_status["agents_count"] = health_status["individual_agents_count"]  # For backward compatibility
-            
-
-            
-            self._send_json_response(200, health_status)
+            self._send_json_response(200, health_response)
             
         except Exception as e:
             logger.error(f"Health check failed: {str(e)}")
-            error_response = {
-                "status": "unhealthy",
-                "error": str(e),
-                "timestamp": asyncio.get_event_loop().time()
-            }
+            error_response = ResponseFormatter.format_internal_error(
+                error=e,
+                include_details=False
+            )
             self._send_json_response(500, error_response)
     
     def _handle_root(self):
         """Handle root endpoint."""
-        response = {
-            "service": "multilingual-inference-orchestrator",
-            "version": "1.0.0",
-            "endpoints": {
-                "health": "GET /health",
-                "inference": "POST /infer"
-            },
-            "inference_methods": {
-                "orchestrator": "Use all available agents with best result selection",
-                "simple": "Basic pattern matching without external dependencies",
-                "rag": "Vector similarity search using sentence transformers",
-                "hybrid": "Sequential pipeline combining NER, RAG, and LLM",
-                "ner": "Named entity recognition for brand extraction",
-                "llm": "Large language model inference",
-                "finetuned_nova_llm": "Fine-tuned Nova model specialized for brand extraction"
-            },
-            "request_format": {
-                "product_name": "string (required)",
-                "language_hint": "string (optional: en, th, mixed, auto)",
-                "method": "string (optional: orchestrator, simple, rag, hybrid, ner, llm)"
-            }
-        }
-        self._send_json_response(200, response)
+        try:
+            # Get available methods dynamically
+            available_methods = self.method_mapper.get_valid_methods(include_orchestrator=True)
+            
+            # Format root response using ResponseFormatter
+            response = ResponseFormatter.format_root_response(
+                available_methods=available_methods
+            )
+            
+            self._send_json_response(200, response)
+            
+        except Exception as e:
+            logger.error(f"Root endpoint failed: {str(e)}")
+            error_response = ResponseFormatter.format_internal_error(
+                error=e,
+                include_details=False
+            )
+            self._send_json_response(500, error_response)
     
     def _handle_inference(self):
         """Handle inference endpoint."""
+        request_id = f"req-{int(time.time() * 1000)}"
+        start_time = time.time()
+        
         try:
             # Read request body
             content_length = int(self.headers.get('Content-Length', 0))
             if content_length == 0:
-                self._send_error(400, "Empty request body")
+                error_response = ResponseFormatter.format_validation_error(
+                    field_name="request_body",
+                    field_value="empty",
+                    error_type="missing_field"
+                )
+                self._send_json_response(400, error_response)
                 return
             
             body = self.rfile.read(content_length)
             try:
                 request_data = json.loads(body.decode('utf-8'))
             except json.JSONDecodeError:
-                self._send_error(400, "Invalid JSON")
+                error_response = ResponseFormatter.format_error_response(
+                    status_code=400,
+                    error_message="Invalid JSON format in request body",
+                    request_id=request_id
+                )
+                self._send_json_response(400, error_response)
                 return
             
-            # Validate request
+            # Validate required fields
             if 'product_name' not in request_data:
-                self._send_error(400, "Missing 'product_name' field")
+                error_response = ResponseFormatter.format_validation_error(
+                    field_name="product_name",
+                    field_value=None,
+                    error_type="missing_field"
+                )
+                error_response["request_id"] = request_id
+                self._send_json_response(400, error_response)
                 return
             
             product_name = request_data['product_name']
@@ -158,10 +189,17 @@ class InferenceHandler(BaseHTTPRequestHandler):
             except ValueError:
                 lang_hint = LanguageHint.AUTO
             
-            # Validate method parameter
-            valid_methods = ['orchestrator', 'simple', 'rag', 'hybrid', 'ner', 'llm', 'finetuned_nova_llm']
-            if method not in valid_methods:
-                self._send_error(400, f"Invalid method '{method}'. Valid methods: {', '.join(valid_methods)}")
+            # Validate method parameter using MethodAgentMapper
+            is_valid, error_message = self.method_mapper.validate_method(method, include_orchestrator=True)
+            if not is_valid:
+                error_response = ResponseFormatter.format_validation_error(
+                    field_name="method",
+                    field_value=method,
+                    valid_values=self.method_mapper.get_valid_methods(include_orchestrator=True),
+                    error_type="invalid_value"
+                )
+                error_response["request_id"] = request_id
+                self._send_json_response(400, error_response)
                 return
             
             # Create product input
@@ -173,22 +211,39 @@ class InferenceHandler(BaseHTTPRequestHandler):
             # Handle different inference methods
             if method == 'orchestrator':
                 # Use orchestrator with all available agents
-                result = self._handle_orchestrator_inference_sync(product_input)
+                result = self._handle_orchestrator_inference_sync(product_input, method, request_id)
             else:
                 # Use specific agent method
-                result = self._handle_specific_agent_inference_sync(product_input, method)
+                result = self._handle_specific_agent_inference_sync(product_input, method, request_id)
             
-            self._send_json_response(200, result)
-            return
-
+            # Calculate processing time
+            processing_time = time.time() - start_time
+            
+            # Format success response if result doesn't already have proper format
+            if not isinstance(result, dict) or "status" not in result:
+                formatted_result = ResponseFormatter.format_success_response(
+                    result=result,
+                    method=method,
+                    request_id=request_id,
+                    processing_time=processing_time
+                )
+                self._send_json_response(200, formatted_result)
+            else:
+                # Result already formatted, just add missing fields if needed
+                if "request_id" not in result:
+                    result["request_id"] = request_id
+                if "processing_time_ms" not in result and processing_time:
+                    result["processing_time_ms"] = int(processing_time * 1000)
+                self._send_json_response(200, result)
             
         except Exception as e:
             logger.error(f"Inference request failed: {str(e)}")
-            error_response = {
-                "status": "error",
-                "error": str(e),
-                "timestamp": asyncio.get_event_loop().time()
-            }
+            error_response = ResponseFormatter.format_internal_error(
+                error=e,
+                method=request_data.get('method') if 'request_data' in locals() else None,
+                request_id=request_id,
+                include_details=False
+            )
             self._send_json_response(500, error_response)
     
     def _send_json_response(self, status_code: int, data: Dict[str, Any]):
@@ -201,20 +256,21 @@ class InferenceHandler(BaseHTTPRequestHandler):
         response_json = json.dumps(data, indent=2)
         self.wfile.write(response_json.encode('utf-8'))
     
-    def _send_error(self, status_code: int, message: str):
-        """Send error response."""
-        error_data = {
-            "error": message,
-            "status_code": status_code,
-            "timestamp": asyncio.get_event_loop().time()
-        }
-        self._send_json_response(status_code, error_data)
+    def _send_error(self, status_code: int, message: str, method: Optional[str] = None, request_id: Optional[str] = None):
+        """Send error response using ResponseFormatter."""
+        error_response = ResponseFormatter.format_error_response(
+            status_code=status_code,
+            error_message=message,
+            method=method,
+            request_id=request_id
+        )
+        self._send_json_response(status_code, error_response)
     
 
     
 
     
-    def _handle_orchestrator_inference_sync(self, product_input: ProductInput) -> Dict[str, Any]:
+    def _handle_orchestrator_inference_sync(self, product_input: ProductInput, method: str, request_id: str) -> Dict[str, Any]:
         """Handle orchestrator inference with all available agents."""
         logger.info(f"Checking orchestrator availability...")
         logger.info(f"  - Has orchestrator attr: {hasattr(self, 'orchestrator')}")
@@ -235,61 +291,55 @@ class InferenceHandler(BaseHTTPRequestHandler):
                 
                 # Add orchestrator metadata to result
                 if isinstance(result, dict):
-                    result['agent_used'] = 'orchestrator'
+                    result['method'] = method
                     result['orchestrator_agents'] = list(self.orchestrator.agents.keys())
-                    result['method'] = 'orchestrator'
+                    result['request_id'] = request_id
                 
                 return result
                 
             except Exception as e:
                 logger.error(f"Orchestrator inference failed: {str(e)}")
                 # Return error response for orchestrator failure
-                return {
-                    "status": "error",
-                    "error": f"Orchestrator inference failed: {str(e)}",
-                    "method": "orchestrator",
-                    "timestamp": time.time()
-                }
+                return ResponseFormatter.format_internal_error(
+                    error=e,
+                    method=method,
+                    request_id=request_id,
+                    include_details=False
+                )
         
         # Return status response when orchestrator is not available
-        return {
-            "input": {
-                "product_name": product_input.product_name,
-                "language_hint": product_input.language_hint.value
-            },
-            "status": "ready",
-            "message": "Orchestrator service is running but no agents are available for inference",
-            "orchestrator_status": "initialized",
-            "registered_agents": len(getattr(self.orchestrator, 'agents', [])) if hasattr(self, 'orchestrator') and self.orchestrator else 0,
-            "available_agents": list(getattr(self.orchestrator, 'agents', {}).keys()) if hasattr(self, 'orchestrator') and self.orchestrator else [],
-            "method": "orchestrator",
-            "next_steps": [
-                "Check agent dependencies (spaCy, sentence-transformers, boto3)",
-                "Verify AWS credentials for LLM agent",
-                "Check Milvus database connectivity for RAG agent",
-                "Review agent configuration in settings"
-            ],
-            "timestamp": time.time()
-        }
+        available_methods = self.method_mapper.get_valid_methods(include_orchestrator=False)
+        return ResponseFormatter.format_service_unavailable_error(
+            method=method,
+            reason="Orchestrator service is running but no agents are available for inference",
+            available_methods=available_methods
+        )
     
-    def _handle_specific_agent_inference_sync(self, product_input: ProductInput, method: str) -> Dict[str, Any]:
+    def _handle_specific_agent_inference_sync(self, product_input: ProductInput, method: str, request_id: str) -> Dict[str, Any]:
         """Handle inference using a specific agent method."""
         logger.info(f"Using specific agent method: {method}")
         
-        # Check if the requested agent is available in individual agents
-        if method not in self.individual_agents:
-            available_agents = list(self.individual_agents.keys())
-            return {
-                "status": "error",
-                "error": f"Agent '{method}' not available. Available agents: {available_agents}",
-                "method": method,
-                "available_agents": available_agents,
-                "timestamp": time.time()
-            }
+        # Check if the requested method is available
+        # First try to get from method mapper (registry), then fallback to individual agents
+        agent = self.method_mapper.get_agent_for_method(method)
+        if agent is None and method in self.individual_agents:
+            agent = self.individual_agents[method]
+        
+        if agent is None:
+            available_methods = self.method_mapper.get_valid_methods(include_orchestrator=True)
+            # Also add any individual agents not in registry
+            for agent_name in self.individual_agents.keys():
+                if agent_name not in available_methods:
+                    available_methods.append(agent_name)
+            
+            return ResponseFormatter.format_service_unavailable_error(
+                method=method,
+                reason="Method not available or agent not initialized",
+                available_methods=available_methods
+            )
         
         try:
-            # Get the specific agent from individual agents
-            agent = self.individual_agents[method]
+            # Use the agent obtained from method mapper
             
             # Run agent inference in thread
             import concurrent.futures
@@ -306,7 +356,7 @@ class InferenceHandler(BaseHTTPRequestHandler):
                     "product_name": product_input.product_name,
                     "language": product_input.language_hint.value,
                     "method": method,
-                    "agent_used": method,
+                    "request_id": request_id,
                     "timestamp": time.time()
                 }
                 
@@ -403,21 +453,21 @@ class InferenceHandler(BaseHTTPRequestHandler):
             else:
                 # Agent failed
                 error_msg = agent_result.get("error", "Unknown agent error") if agent_result else "Agent returned no result"
-                return {
-                    "status": "error",
-                    "error": f"Agent '{method}' failed: {error_msg}",
-                    "method": method,
-                    "timestamp": time.time()
-                }
+                return ResponseFormatter.format_error_response(
+                    status_code=500,
+                    error_message=f"Method '{method}' processing failed: {error_msg}",
+                    method=method,
+                    request_id=request_id
+                )
                 
         except Exception as e:
-            logger.error(f"Specific agent inference failed for {method}: {str(e)}")
-            return {
-                "status": "error",
-                "error": f"Agent '{method}' inference failed: {str(e)}",
-                "method": method,
-                "timestamp": time.time()
-            }
+            logger.error(f"Specific method inference failed for {method}: {str(e)}")
+            return ResponseFormatter.format_internal_error(
+                error=e,
+                method=method,
+                request_id=request_id,
+                include_details=False
+            )
     
     def _sync_agent_inference(self, agent, product_input: ProductInput) -> Dict[str, Any]:
         """Run specific agent inference synchronously."""

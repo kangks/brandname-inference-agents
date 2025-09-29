@@ -144,6 +144,10 @@ class BaseAgent(ABC):
         else:
             self.logger.warning(f"Agent {self.agent_name} initialization failed")
     
+    def is_initialized(self) -> bool:
+        """Check if agent is initialized."""
+        return self._is_initialized
+    
     def _setup_monitoring(self) -> None:
         """Setup monitoring components for the agent."""
         try:

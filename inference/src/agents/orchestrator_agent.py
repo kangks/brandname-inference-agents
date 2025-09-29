@@ -539,7 +539,7 @@ Brand name:"""
                                    for r in results.values())
         
         if not successful_specialized or len(results) < 2:  # Include registry for comparison if needed
-            for agent_name, agent in self.agents.items():
+            for agent_name, agent in self._legacy_agents.items():
                 # Skip if we already have enough good results from specialized agents
                 if successful_specialized and len([r for r in results.values() 
                                                  if r.get("success") and r.get("prediction") != "Unknown"]) >= 3:
@@ -872,7 +872,7 @@ Brand name:"""
             
             # Add registry agents to legacy agents dict for compatibility
             for agent_name, agent in registry_agents.items():
-                self.agents[agent_name] = agent
+                self._legacy_agents[agent_name] = agent
                 self.logger.info(f"Integrated registry agent: {agent_name}")
             
             self.logger.info(f"Integrated {len(registry_agents)} registry agents")
@@ -1075,18 +1075,23 @@ class StrandsOrchestratorAgent(StrandsMultiAgentOrchestrator):
         self.agent_name = "orchestrator"
         
         # Legacy compatibility attributes
-        self.agents = {}  # For compatibility with existing code
+        self._legacy_agents = {}  # For compatibility with existing code
         self._is_initialized = True
+    
+    @property
+    def agents(self):
+        """Legacy agents property for backward compatibility."""
+        return self._legacy_agents
     
     def register_agent(self, agent_name: str, agent: Any, timeout: Optional[float] = None) -> None:
         """Legacy method for registering agents."""
-        self.agents[agent_name] = agent
+        self._legacy_agents[agent_name] = agent
         self.logger.info(f"Registered legacy agent '{agent_name}' (compatibility mode)")
     
     def unregister_agent(self, agent_name: str) -> None:
         """Legacy method for unregistering agents."""
-        if agent_name in self.agents:
-            del self.agents[agent_name]
+        if agent_name in self._legacy_agents:
+            del self._legacy_agents[agent_name]
             self.logger.info(f"Unregistered legacy agent '{agent_name}'")
     
     async def initialize(self) -> None:
