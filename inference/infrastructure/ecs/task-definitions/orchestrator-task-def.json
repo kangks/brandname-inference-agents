@@ -33,6 +33,18 @@
         {
           "name": "LOG_LEVEL",
           "value": "INFO"
+        },
+        {
+          "name": "CUSTOM_DEPLOYMENT_NAME",
+          "value": "brandname-inference-nova-pro-custom-model-deployment"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "us-east-1"
+        },
+        {
+          "name": "INFERENCE_ENV",
+          "value": "production"
         }
       ],
       "logConfiguration": {
