@@ -91,6 +91,7 @@ Resources:
   ECSTaskRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: multilingual-inference-task-role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -109,6 +110,16 @@ Resources:
                   - bedrock:InvokeModelWithResponseStream
                   - bedrock:GetFoundationModel
                   - bedrock:ListFoundationModels
+                  - bedrock:GetCustomModelDeployment
+                  - bedrock:ListCustomModelDeployments
+                  - bedrock:GetCustomModel
+                  - bedrock:ListCustomModels
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
                 Resource: '*'
         - PolicyName: S3Access
           PolicyDocument:

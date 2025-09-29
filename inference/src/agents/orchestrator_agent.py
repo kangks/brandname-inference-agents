@@ -221,8 +221,43 @@ class StrandsMultiAgentOrchestrator(Agent):
         """
         agent_id = f"finetuned_nova_agent_{uuid.uuid4().hex[:8]}"
         
+        # Get deployment ARN from environment variable or use fallback
+        import os
+        custom_deployment_name = os.getenv("CUSTOM_DEPLOYMENT_NAME")
+        
+        # Try to get deployment ARN dynamically
+        deployment_arn = None
+        if custom_deployment_name:
+            try:
+                import boto3
+                from botocore.exceptions import ClientError
+                
+                # Create Bedrock client
+                session = boto3.Session()
+                bedrock_client = session.client('bedrock', region_name='us-east-1')
+                
+                self.logger.info(f"Getting deployment ARN for: {custom_deployment_name}")
+                
+                # Get custom model deployment
+                response = bedrock_client.get_custom_model_deployment(
+                    customModelDeploymentIdentifier=custom_deployment_name
+                )
+                
+                deployment_arn = response['customModelDeploymentArn']
+                self.logger.info(f"Successfully retrieved deployment ARN: {deployment_arn}")
+                
+            except Exception as e:
+                self.logger.error(f"Failed to get deployment ARN for {custom_deployment_name}: {str(e)}")
+                # Fall back to hardcoded ARN
+                deployment_arn = "arn:aws:bedrock:us-east-1:654654616949:custom-model-deployment/9o1i1v4ng8wy"
+                self.logger.warning(f"Using fallback deployment ARN: {deployment_arn}")
+        else:
+            # Use fallback ARN if no custom deployment name
+            deployment_arn = "arn:aws:bedrock:us-east-1:654654616949:custom-model-deployment/9o1i1v4ng8wy"
+            self.logger.warning(f"No CUSTOM_DEPLOYMENT_NAME set, using fallback ARN: {deployment_arn}")
+        
         finetuned_nova_agent = Agent(
-            model="arn:aws:bedrock:us-east-1:654654616949:custom-model-deployment/9o1i1v4ng8wy",
+            model=deployment_arn,
             name=f"FinetunedNova_Agent_{agent_id}",  # Ensure unique name for Swarm
             system_prompt="""You are a specialized fine-tuned Nova model optimized specifically for brand extraction from product titles.
 
@@ -233,16 +268,17 @@ Your training has specialized you for:
 - Recognizing transliterations and brand variations
 
 Instructions:
-- Extract ONLY the brand name from the product title
+- Extract the complete brand name from the product title
 - Return "Unknown" if no clear brand is identifiable
 - Use standard brand formatting (e.g., "Samsung" not "samsung")
 - For mixed-language titles, prioritize the internationally recognized brand name
+- Always return the full brand name, not abbreviations or partial names
 
-Respond with only the brand name, no additional text or explanation."""
+Respond with the complete brand name only."""
         )
         
         self.specialized_agents[agent_id] = finetuned_nova_agent
-        self.logger.info(f"Created Fine-tuned Nova agent: {agent_id}")
+        self.logger.info(f"Created Fine-tuned Nova agent: {agent_id} with ARN: {deployment_arn}")
         return agent_id
     
     @tool
