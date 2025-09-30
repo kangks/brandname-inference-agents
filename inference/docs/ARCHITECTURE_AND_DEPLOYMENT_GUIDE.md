@@ -6,38 +6,52 @@ The multilingual product inference system is designed with a flexible architectu
 
 ## Architecture Patterns
 
-### 1. Monolithic Deployment (Current Default)
+### 1. Advanced Multi-Agent Architecture (Current Implementation)
 
-In the current implementation, all agents run within the same container/memory space:
+The system implements a sophisticated multi-agent architecture using Strands Agents SDK with independent agent coordination:
 
 ```
-┌─────────────────────────────────────────┐
-│           ECS Container                 │
-│  ┌─────────────────────────────────┐   │
-│  │        HTTP Server              │   │
-│  │         (server.py)             │   │
-│  └─────────────────────────────────┘   │
-│  ┌─────────────────────────────────┐   │
-│  │      Orchestrator Agent         │   │
-│  │  ┌─────┐ ┌─────┐ ┌─────┐ ┌────┐ │   │
-│  │  │ NER │ │ RAG │ │ LLM │ │Hyb.│ │   │
-│  │  └─────┘ └─────┘ └─────┘ └────┘ │   │
-│  └─────────────────────────────────┘   │
-│  ┌─────────────────────────────────┐   │
-│  │     Individual Agents           │   │
-│  │  ┌─────┐ ┌─────┐ ┌─────┐ ┌────┐ │   │
-│  │  │ NER │ │ RAG │ │ LLM │ │Simp│ │   │
-│  │  └─────┘ └─────┘ └─────┘ └────┘ │   │
-│  └─────────────────────────────────┘   │
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                    ECS Container                                │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                HTTP Server (server.py)                 │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │         Strands MultiAgent Orchestrator                │   │ ← Advanced Coordination
+│  │                                                         │   │
+│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐      │   │
+│  │  │ Strands     │ │ Strands     │ │ Fine-tuned  │      │   │
+│  │  │ NER Agent   │ │ RAG Agent   │ │ Nova Agent  │      │   │ ← Independent Agents
+│  │  │ (Nova Pro)  │ │ (Nova Pro)  │ │ (Custom ARN)│      │   │
+│  │  └─────────────┘ └─────────────┘ └─────────────┘      │   │
+│  │                                                         │   │
+│  │  ┌─────────────┐ ┌─────────────┐                      │   │
+│  │  │ Strands     │ │ Hybrid      │                      │   │
+│  │  │ LLM Agent   │ │ Agent       │                      │   │
+│  │  │ (Nova Pro)  │ │ (Combined)  │                      │   │
+│  │  └─────────────┘ └─────────────┘                      │   │
+│  │                                                         │   │
+│  │  Coordination Methods:                                  │   │
+│  │  • Swarm (Parallel execution)                          │   │
+│  │  • Graph (Structured workflows)                        │   │
+│  │  • Enhanced (Priority-based selection)                 │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │              Legacy Agent Registry                      │   │ ← Fallback System
+│  │  ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐              │   │
+│  │  │ NER │ │ RAG │ │ LLM │ │Hybr.│ │Simp.│              │   │
+│  │  └─────┘ └─────┘ └─────┘ └─────┘ └─────┘              │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 **Key Characteristics:**
-- All agents run in the same memory space
-- No network calls between agents
-- Single container deployment
-- Orchestrator coordinates agents via direct method calls
-- Individual agents can be called directly via the `method` parameter
+- **Independent Agent Execution**: Each Strands agent runs with its own model instance and processing pipeline
+- **Advanced Coordination**: Uses Strands multiagent tools (Swarm, GraphBuilder, workflow) for sophisticated orchestration
+- **Fine-tuned Specialization**: Custom Amazon Nova Pro deployment for domain-specific brand extraction
+- **Fallback Architecture**: Legacy agent registry provides backup functionality
+- **Dynamic Agent Creation**: Orchestrator creates specialized agents on-demand with unique configurations
+- **Parallel Processing**: Swarm coordination enables concurrent agent execution for improved performance
 
 ### 2. Microservices Deployment (Infrastructure Available)
 
@@ -103,14 +117,33 @@ POST http://production-inference-alb-2106753314.us-east-1.elb.amazonaws.com/infe
 
 ### Method Parameter Options
 
-| Method | Description | Execution Mode |
-|--------|-------------|----------------|
-| `orchestrator` | Uses all available agents with best result selection | In-memory coordination |
-| `simple` | Basic pattern matching without external dependencies | Direct agent call |
-| `ner` | Named entity recognition for brand extraction | Direct agent call |
-| `rag` | Vector similarity search using sentence transformers | Direct agent call |
-| `llm` | Large language model inference | Direct agent call |
-| `hybrid` | Sequential pipeline combining NER, RAG, and LLM | Direct agent call |
+| Method | Description | Implementation | Execution Mode |
+|--------|-------------|----------------|----------------|
+| `orchestrator` | **Strands MultiAgent Orchestrator** - Coordinates all agents using advanced multiagent patterns | Strands Agents SDK with Swarm/Graph coordination | Advanced multi-agent coordination |
+| `finetuned` | **Fine-tuned Nova Agent** - Specialized Amazon Nova Pro model for brand extraction | Custom deployment ARN with domain-specific training | Direct Strands agent call |
+| `simple` | Basic pattern matching without external dependencies | Legacy regex-based implementation | Direct agent call |
+| `ner` | **Multilingual NER Agent** - spaCy-based entity recognition with Thai-English support | SpacyNERAgent with enhanced multilingual processing | Direct agent call |
+| `rag` | **Enhanced RAG Agent** - Vector similarity search using SentenceTransformers and Milvus | Milvus vector database with multilingual embeddings | Direct agent call |
+| `llm` | **Strands LLM Agent** - Amazon Nova Pro with specialized prompts | Strands Agent with multilingual prompt engineering | Direct Strands agent call |
+| `hybrid` | Sequential pipeline combining NER, RAG, and LLM with confidence weighting | Combined approach with intelligent result aggregation | Direct agent call |
+
+### Agent Implementation Details
+
+#### Fine-tuned Nova Agent
+- **Model ARN**: `arn:aws:bedrock:us-east-1:654654616949:custom-model-deployment/9o1i1v4ng8wy`
+- **Training Domain**: Brand extraction from product titles
+- **System Prompt**: Optimized for concise brand name extraction
+- **Languages**: English, Thai, mixed-language transliterations
+- **Confidence Range**: 0.7+ for clear brand identifications
+
+#### Strands MultiAgent Orchestrator
+- **Coordination Methods**:
+  - `swarm`: Parallel execution using `Strands.multiagent.Swarm`
+  - `graph`: Structured workflows using `Strands.multiagent.GraphBuilder`  
+  - `enhanced`: Custom priority-based agent selection
+- **Agent Management**: Dynamic creation of specialized Strands agents
+- **Fallback Strategy**: Automatic fallback to legacy registry agents
+- **Result Aggregation**: Intelligent selection based on confidence and method performance
 
 ### How Method Selection Works
 
