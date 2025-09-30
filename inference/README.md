@@ -1,6 +1,6 @@
 # Multilingual Product Inference System
 
-A sophisticated AI-powered system for extracting brand names from multilingual product descriptions using advanced multi-agent coordination.
+A sophisticated AI-powered system for extracting brand names from multilingual product descriptions using advanced multi-agent coordination with Strands Agents SDK.
 
 ## 🚀 Quick Start
 
@@ -22,28 +22,48 @@ pip install -r requirements.txt
 python -m inference.server
 ```
 
-## 🏗️ Architecture
+## 🏗️ Agentic Architecture
 
-**Current Deployment**: Monolithic architecture with all agents in a single container
+**Current Implementation**: Advanced multi-agent system using Strands Agents SDK with independent agent coordination
 
 ```
-┌─────────────────────────────────────────┐
-│           ECS Container                 │
-│  ┌─────────────────────────────────┐   │
-│  │        HTTP Server              │   │ ← API Requests
-│  │         (server.py)             │   │
-│  └─────────────────────────────────┘   │
-│  ┌─────────────────────────────────┐   │
-│  │      Orchestrator Agent         │   │ ← Coordinates all agents
-│  │  ┌─────┐ ┌─────┐ ┌─────┐ ┌────┐ │   │
-│  │  │ NER │ │ RAG │ │ LLM │ │Hyb.│ │   │ ← All agents in same memory
-│  │  └─────┘ └─────┘ └─────┘ └────┘ │   │
-│  │  ┌─────┐                       │   │
-│  │  │Simp.│                       │   │
-│  │  └─────┘                       │   │
-│  └─────────────────────────────────┘   │
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                    ECS Container                                │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                HTTP Server (server.py)                 │   │ ← API Requests
+│  └─────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │         Strands MultiAgent Orchestrator                │   │ ← Coordinates via Swarm/Graph
+│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐      │   │
+│  │  │ Strands     │ │ Strands     │ │ Fine-tuned  │      │   │
+│  │  │ NER Agent   │ │ RAG Agent   │ │ Nova Agent  │      │   │ ← Independent Strands Agents
+│  │  └─────────────┘ └─────────────┘ └─────────────┘      │   │
+│  │  ┌─────────────┐ ┌─────────────┐                      │   │
+│  │  │ Strands     │ │ Hybrid      │                      │   │
+│  │  │ LLM Agent   │ │ Agent       │                      │   │
+│  │  └─────────────┘ └─────────────┘                      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │              Legacy Agent Registry                      │   │ ← Fallback agents
+│  │  ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐              │   │
+│  │  │ NER │ │ RAG │ │ LLM │ │Hybr.│ │Simp.│              │   │
+│  │  └─────┘ └─────┘ └─────┘ └─────┘ └─────┘              │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
 ```
+
+### Agent Independence & Coordination
+
+Each agent runs independently with its own:
+- **Strands Agent Instance**: Individual AI agent with specialized system prompts
+- **Processing Pipeline**: Independent inference logic and confidence scoring  
+- **Resource Management**: Separate model loading and cleanup procedures
+- **Error Handling**: Isolated failure modes without affecting other agents
+
+**Coordination Methods**:
+- **Swarm Coordination**: Parallel execution using `Strands.multiagent.Swarm`
+- **Graph Coordination**: Structured workflows using `Strands.multiagent.GraphBuilder`
+- **Enhanced Coordination**: Custom orchestration with priority-based agent selection
 
 ## 🎯 API Usage
 
@@ -79,14 +99,29 @@ curl "$BASE_URL/"        # Service information
 
 ## 🧠 Available Agents
 
-| Method | Description | Use Case | Response Time |
-|--------|-------------|----------|---------------|
-| `orchestrator` | Coordinates all agents, returns best result | **Production use** - highest accuracy | ~1500ms |
-| `simple` | Pattern-based matching | Fast responses, no dependencies | ~25ms |
-| `ner` | Named Entity Recognition | Extract entities from text | ~150ms |
-| `rag` | Vector similarity search | Similarity-based matching | ~300ms |
-| `llm` | Large Language Model reasoning | Complex reasoning tasks | ~1200ms |
-| `hybrid` | Sequential NER → RAG → LLM pipeline | Balanced accuracy and speed | ~900ms |
+| Method | Description | Implementation | Use Case | Response Time |
+|--------|-------------|----------------|----------|---------------|
+| `orchestrator` | **Strands MultiAgent Orchestrator** - Coordinates all agents using Swarm/Graph | Strands Agents SDK with multiagent coordination | **Production use** - highest accuracy | ~1500ms |
+| `finetuned` | **Fine-tuned Nova Agent** - Specialized Amazon Nova Pro model for brand extraction | Custom deployment ARN with optimized prompts | **Highest accuracy** - domain-specific training | ~800ms |
+| `simple` | Pattern-based matching with regex | Legacy implementation | Fast responses, no dependencies | ~25ms |
+| `ner` | **Multilingual NER Agent** - spaCy-based entity recognition | SpacyNERAgent with Thai-English support | Extract entities from multilingual text | ~150ms |
+| `rag` | **Enhanced RAG Agent** - Vector similarity with SentenceTransformers | Milvus + sentence-transformers | Similarity-based brand matching | ~300ms |
+| `llm` | **Strands LLM Agent** - Amazon Nova Pro reasoning | Strands Agent with specialized prompts | Complex multilingual reasoning | ~1200ms |
+| `hybrid` | Sequential NER → RAG → LLM pipeline | Combined approach with confidence weighting | Balanced accuracy and speed | ~900ms |
+
+### Agent Implementations
+
+#### Fine-tuned Nova Agent (Recommended)
+- **Model**: Custom Amazon Nova Pro deployment (`arn:aws:bedrock:us-east-1:654654616949:custom-model-deployment/9o1i1v4ng8wy`)
+- **Specialization**: Fine-tuned specifically for brand extraction from product titles
+- **Languages**: English, Thai, mixed-language support
+- **Confidence**: Typically 0.7+ for clear brand names
+
+#### Strands MultiAgent Orchestrator
+- **Coordination**: Uses `Strands.multiagent.Swarm` for parallel agent execution
+- **Agent Management**: Dynamic creation and coordination of specialized agents
+- **Fallback**: Automatic fallback to legacy agents if Strands agents fail
+- **Result Aggregation**: Intelligent selection of best prediction across all agents
 
 ## 📁 Project Structure
 
@@ -120,19 +155,81 @@ inference/
 
 ## 🧪 Testing
 
+### Comprehensive Test Suite
+
 ```bash
-# Run all tests
-python -m pytest tests/
+# Run all tests with coverage
+python -m pytest tests/ -v --cov=src
 
-# Test specific components
-python -m pytest tests/test_orchestrator_*.py
+# Test by category
+python -m pytest tests/unit/           # Unit tests for individual agents
+python -m pytest tests/integration/   # Integration tests for agent coordination  
+python -m pytest tests/end_to_end/    # End-to-end system tests
 
-# End-to-end validation
-python tests/final_validation.py
+# Test specific agents
+python -m pytest tests/unit/test_orchestrator_agent.py  # Strands orchestrator
+python -m pytest tests/unit/test_ner_agent.py          # NER agent
+python -m pytest tests/unit/test_rag_agent.py          # RAG agent
+python -m pytest tests/unit/test_llm_agent.py          # LLM agent
 
-# Test all API methods
-./scripts/test_brand_inference_endpoints.sh
+# Test multiagent coordination
+python -m pytest tests/integration/test_swarm_coordination.py
+python -m pytest tests/integration/test_orchestrator_coordination.py
+
+# AWS and custom deployment tests
+python -m pytest tests/end_to_end/test_custom_deployment.py
+python -m pytest tests/end_to_end/test_aws_environment.py
+
+# Performance and batch testing
+./scripts/batch_compare.sh              # Batch comparison across methods
+./scripts/test_brand_inference_endpoints.sh  # API endpoint validation
 ```
+
+### Test Results Example
+
+Recent batch comparison results showing agent performance:
+
+```bash
+% bash ./scripts/batch_compare.sh
+=======================================================================
+🔎 Querying for: CLEAR NOSE Moist Skin Barrier Moisturizing Gel 120ml เคลียร์โนส มอยส์เจอไรซิ่งเจล เฟเชียล.
+=======================================================================
+Method     Prediction  Confidence
+finetuned  Clear       0.7
+ner        name        0.9
+rag        name        0.9
+llm        name        0.85
+hybrid     name        0.7000000000000001
+
+=======================================================================
+🔎 Querying for: Dr.Althea Cream ด๊อกเตอร์อัลเทีย ครีมบำรุงผิวหน้า 50ml (345 Relief/147 Barrier)
+=======================================================================
+Method     Prediction  Confidence
+finetuned  Dr.Althea   0.7
+ner        name        0.9
+rag        name        0.9
+llm        name        1.0
+hybrid     name        0.7000000000000001
+
+=======================================================================
+🔎 Querying for: Eucerin Spotless Brightening Skin Tone Perfecting Body Lotion 250ml ยูเซอริน ผลิตภัณฑ์บำรุงผิวกาย
+=======================================================================
+Method     Prediction  Confidence
+finetuned  Eucerin     0.7
+ner        name        0.9
+rag        name        0.9
+llm        name        1.0
+hybrid     name        0.7000000000000001
+```
+
+### Test Categories
+
+- **Unit Tests** (`@pytest.mark.unit`): Individual agent functionality
+- **Integration Tests** (`@pytest.mark.integration`): Agent coordination and communication
+- **End-to-End Tests** (`@pytest.mark.e2e`): Full system workflows
+- **AWS Tests** (`@pytest.mark.aws`): AWS service integration
+- **Multilingual Tests** (`@pytest.mark.multilingual`): Thai-English mixed content
+- **Performance Tests** (`@pytest.mark.performance`): Load and latency testing
 
 ## 🔧 Configuration
 
@@ -169,6 +266,6 @@ aws logs tail /ecs/multilingual-inference-orchestrator --since 1h
 
 ## 📞 Support
 
-- Check [Architecture FAQ](../INFERENCE_ARCHITECTURE_FAQ.md) for common questions
+- Check [Architecture FAQ](docs/INFERENCE_ARCHITECTURE_FAQ.md) for common questions
 - Review CloudWatch logs for detailed error information
 - Consult [API Usage Guide](docs/API_USAGE_GUIDE.md) for implementation examples
